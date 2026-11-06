@@ -4,7 +4,7 @@ The Galaxy A13 runs a small Python server in Termux and shows the dashboard full
 
 - **Today:** clock, date, weather, countdowns, a focus timer that logs your minutes, and your class schedule. Once today's last class ends, the schedule switches to the next day that has classes.
 - **Grind:** your LeetCode streak with a live countdown to when it breaks (05:30 IST), your POTD chain (days in a row you solved the problem of the day, with the last 14 days as pips), problems solved split into Easy, Medium and Hard, the daily problem as a quest, tiny next targets (the next 10 LeetCode solves, the next 25 Codeforces rating), today's submissions against yesterday's, and a countdown to the next contest.
-- **Goals:** daily, weekly and monthly goals that earn XP. XP fills levels, perfect days build a streak, and badges unlock along the way. Quests sit on the right, with your level, perfect-day streak and badges on the left. A toast in the top bar shows each XP gain.
+- **Quests:** daily, weekly and monthly goals that earn XP. XP fills levels, perfect days build a streak, and badges unlock along the way. Quests sit on the right, with your level, perfect-day streak and badges on the left. A toast in the top bar shows each XP gain.
 
 **Extras:**
 - **Auto-rotate:** pages change every 30 s, and swiping changes them by hand.
@@ -72,7 +72,7 @@ Each goal resets daily, weekly or monthly and is tracked one of these ways:
 
 | Tracked by | Counts |
 |---|---|
-| Me (+1 on phone) | Taps on the phone's Goals page (− undoes one) |
+| Me (+1 on phone) | Taps on the phone's Quests page (− undoes one) |
 | LeetCode POTD | 1 once you've solved today's daily problem |
 | LeetCode problems | Different problems accepted today (weekly/monthly goals count submissions instead) |
 | Codeforces contests | Rated Codeforces contests in the period |
@@ -145,7 +145,7 @@ The `data/` folder holds `events.json` (exams and tests), `goals.json` (your goa
 ## Notes
 
 - The **POTD chain** shows `8+` at first: LeetCode's public data only covers your last 20 accepted submissions (about a week), so the server starts its own log from there. Days before that show as hollow pips.
-- The look is a game-style HUD in the **Chakra Petch** font, bundled in `static/fonts/` (SIL Open Font License, see `OFL.txt`), so it works offline.
+- The look is "Royal loot": purple and gold with soft glass panels, in the **Bungee** (numbers and labels) and **Rubik** (text) fonts. Both are bundled in `static/fonts/` under the SIL Open Font License (see the `OFL-*.txt` files), so it works offline.
 - **"Solved today"** on the daily problem is based on LeetCode's reset time (05:30 IST).
 - LeetCode's data comes from the same unofficial GraphQL endpoint the LeetCode website uses. If LeetCode changes it, the Grind page shows a "LeetCode failed" status in the top bar until it's fixed.
 - To run it on the laptop for testing: run `python server.py`, then open http://localhost:8080.
