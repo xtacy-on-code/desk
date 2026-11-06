@@ -26,18 +26,20 @@ There are no API keys and no installs beyond Python, which comes from the Python
    - **Termux:Boot** (optional), to start the dashboard automatically after a reboot
 3. Open Termux and run:
    ```
-   pkg update && pkg install python termux-api
+   pkg update && pkg install python termux-api git
    termux-setup-storage
    ```
    Tap **Allow** when it asks for storage access.
 
-## 2. Copy the folder over
+## 2. Get the code
 
-Connect the phone to your laptop over USB, choose **File transfer**, and copy this whole `phone-dashboard` folder into the phone's **Download** folder. Then, in Termux:
+In Termux:
 
 ```
-cp -r ~/storage/downloads/phone-dashboard ~/
+git clone https://github.com/xtacy-on-code/desk.git ~/phone-dashboard
 ```
+
+That's the whole dashboard. Your own settings and data go in `~/phone-dashboard/data/`, which git never touches (see "Updating" below).
 
 ## 3. Start it
 
@@ -136,11 +138,42 @@ Open the Termux:Boot app once so Android allows it to run at startup.
 | `night_start` / `night_end` | The window for the dim clock-only screen |
 | `focus_presets` | The focus timer buttons, in minutes |
 
-Edit the file in Termux with `nano ~/phone-dashboard/config.json`, or edit the laptop copy and copy it over again. The server picks up changes without a restart.
+`config.json` holds the defaults and comes from GitHub. **Put your own changes in `data/config.json` instead**: any key there overrides the same key in `config.json`, and updates never touch it. For example, to add Classroom links, in Termux run `nano ~/phone-dashboard/data/config.json` and write:
+
+```
+{
+  "ical_feeds": [{"name": "Classroom", "url": "https://calendar.google.com/calendar/ical/.../basic.ics"}]
+}
+```
+
+The server picks up changes without a restart.
+
+## Updating
+
+On the phone, in Termux: stop the server with **Ctrl+C**, then run
+
+```
+cd ~/phone-dashboard && sh update.sh
+```
+
+It pulls the latest version from GitHub and starts the server again. Your `data/` folder (PIN, exams, XP, quests, `data/config.json`) is never touched. If the update fails for any reason (no internet, say), nothing changes and the version you already have starts.
+
+### Moving an older phone install over (once)
+
+If the phone still has a folder that was copied over USB, swap it for the git version without losing anything:
+
+```
+mv ~/phone-dashboard ~/phone-dashboard-old
+git clone https://github.com/xtacy-on-code/desk.git ~/phone-dashboard
+cp -r ~/phone-dashboard-old/data ~/phone-dashboard/
+cp ~/phone-dashboard-old/config.json ~/phone-dashboard/data/config.json
+```
+
+The last line turns your old settings (timetable, calendar links) into your personal `data/config.json`. Once everything works, you can delete the old copy with `rm -rf ~/phone-dashboard-old`.
 
 ## Where your data lives
 
-The `data/` folder holds `events.json` (exams and tests), `goals.json` (your goals), `counters.json` (+1 counts), `xp.json` (XP, streak and milestones), `potd.json` (which days you solved the POTD), `focus.json` (focus minutes per day) and `pin.txt`. To back it up, copy the folder somewhere. Delete `pin.txt` to get a new PIN.
+The `data/` folder holds `events.json` (exams and tests), `goals.json` (your goals), `counters.json` (+1 counts), `xp.json` (XP, streak and milestones), `potd.json` (which days you solved the POTD), `focus.json` (focus minutes per day), `config.json` (your own settings, if any) and `pin.txt`. To back it up, copy the folder somewhere. Delete `pin.txt` to get a new PIN.
 
 ## Notes
 
