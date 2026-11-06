@@ -1,0 +1,51 @@
+{
+  "name": "Vedant",
+  "port": 8080,
+  "leetcode_username": "xtacy",
+  "leetcode_refresh_min": 10,
+
+  "city": "Bhilai",
+
+  "rotate_seconds": 30,
+  "night_start": "00:30",
+  "night_end": "07:00",
+  "focus_presets": [25, 50],
+
+  "weekly_goals": { "dsa": 14, "dms": 10, "apps": 5, "mocks": 1 },
+
+  "timetable": {
+    "mon": [
+      ["09:30", "10:30", "Compiler", ""],
+      ["11:30", "12:30", "OS", ""]
+    ],
+    "tue": [
+      ["09:30", "10:30", "DB", ""],
+      ["10:30", "12:30", "OS Lab", "Lab"],
+      ["15:30", "17:30", "AI Lab", "Lab"]
+    ],
+    "wed": [
+      ["08:30", "09:30", "OS", ""],
+      ["10:30", "11:30", "DB", ""],
+      ["11:30", "12:30", "AI", ""],
+      ["14:30", "16:30", "DB", ""]
+    ],
+    "thu": [
+      ["08:30", "09:30", "AI", ""],
+      ["09:30", "10:30", "Compiler", ""],
+      ["11:30", "12:30", "OS", ""]
+    ],
+    "fri": [
+      ["10:30", "11:30", "DB", ""],
+      ["11:30", "12:30", "AI", ""],
+      ["12:30", "13:30", "Microeconomics", ""],
+      ["15:30", "17:30", "Compiler Lab", "Lab"]
+    ],
+    "sat": [],
+    "sun": []
+  },
+
+  "ical_feeds": [],
+
+  "events": [],
+  "countdowns": []
+}
