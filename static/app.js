@@ -88,7 +88,7 @@ function tick() {
   const now = new Date();
   $("clock").innerHTML = `${hm(now)}<small>${pad(now.getSeconds())}</small>`;
   $("topClock").textContent = hm(now);
-  $("date").textContent = `${DAYS[now.getDay()]}, ${pad(now.getDate())} ${MONTHS[now.getMonth()]}`;
+  $("date").textContent = `${DAYS[now.getDay()]} · ${pad(now.getDate())} ${MONTHS[now.getMonth()]}`;
 
   const night = inNight(now) && Date.now() - nightWake > 60_000 && !focus.running();
   $("night").hidden = !night;
@@ -96,6 +96,7 @@ function tick() {
 
   renderFocus();
   renderContestAlert();
+  if (state) renderTimers();
 }
 
 // Tap the night screen to wake the dashboard for a minute
@@ -279,105 +280,106 @@ function renderToday() {
   $("focusTotal").textContent = `Focus ${mins(f.today)} today · ${mins(f.week)} this week`;
 }
 
-function agoTs(ts) {
-  const s = Date.now() / 1000 - ts;
-  if (s < 3600) return `${Math.max(1, Math.round(s / 60))}m`;
-  if (s < 86400) return `${Math.round(s / 3600)}h`;
-  return `${Math.round(s / 86400)}d`;
+/* ---------------- HUD helpers ---------------- */
+
+// n skewed segments, `filled` of them lit; the first unlit one glows faintly as "next".
+function segs(filled, n = 10) {
+  const f = Math.max(0, Math.min(n, Math.round(filled)));
+  return Array.from({ length: n }, (_, i) => `<i class="${i < f ? "on" : i === f ? "next" : ""}"></i>`).join("");
 }
 
-function shortDate(iso) {
-  const d = new Date(iso + "T00:00");
-  return `${pad(d.getDate())} ${MONTHS[d.getMonth()]}`;
+function hms(sec) {
+  const s = Math.max(0, Math.floor(sec));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h >= 24 ? until(s) : `${pad(h)}:${pad(m)}:${pad(s % 60)}`;
 }
+
+/* ---------------- grind ---------------- */
 
 function renderGrind() {
-  const lc = state.leetcode, cf = state.codeforces;
-  if (!lc) {
-    $("solvedTotal").textContent = "—";
-    $("daily").innerHTML = `<span class="sk" style="width:80%"></span><span class="sk" style="width:40%"></span>`;
-    return;
+  const g = state.grind || {}, lc = state.leetcode;
+  if (g.streak === undefined) {
+    $("lcStreak").textContent = "--";
+    $("streakTimer").textContent = "LeetCode loading";
+  } else {
+    $("lcStreak").textContent = g.streak;
+    const best = g.bestStreak || g.streak, toBeat = best - g.streak;
+    $("bestSegs").innerHTML = segs(best ? (g.streak / best) * 12 : 0, 12);
+    $("bestLine").innerHTML = toBeat > 0
+      ? `Best <b class="acc">${best}</b> · ${toBeat} more ${toBeat === 1 ? "day" : "days"} to beat it`
+      : `<b class="acc">New record</b> · every day now is a personal best`;
   }
-  const s = lc.solved, t = lc.totals;
-  $("solvedTotal").textContent = s.All;
-  $("solvedOf").textContent = `/ ${inr.format(t.All)}`;
-  const parts = [["Easy", "var(--easy)"], ["Medium", "var(--med)"], ["Hard", "var(--hard)"]];
-  $("split").innerHTML = parts.map(([k, c]) => `<i style="flex:${s[k] || 0.01};background:${c}"></i>`).join("");
-  $("legend").innerHTML = parts.map(([k, c]) =>
-    `<span><i class="dot" style="background:${c}"></i>${k}<b>${s[k]}</b></span>`).join("");
 
-  const cfRating = cf?.rating;
-  $("stats").innerHTML = `
-    <div><b class="${lc.streak ? "" : "muted"}">${lc.streak}</b><span>day streak</span></div>
-    <div><b>${state.lcWeek ?? "—"}</b><span>subs this week</span></div>
-    <div><b>${lc.contestRating ?? "—"}</b><span>LC rating</span></div>
-    <div><b>${cfRating ?? "—"}</b><span>${cf ? `CF · ${esc(cf.rank)}` : "CF rating"}</span></div>`;
-
-  // Heatmap: as many weeks as fit the column (columns = weeks, Monday on top)
-  const heat = $("heat");
-  const weeks = Math.max(10, Math.floor((heat.clientWidth + 2) / 11));
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const start = new Date(today); start.setDate(today.getDate() - ((today.getDay() + 6) % 7) - (weeks - 1) * 7);
-  const cells = [];
-  for (let i = 0; i < weeks * 7; i++) {
-    const d = new Date(start); d.setDate(start.getDate() + i);
-    const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-    const n = lc.calendar[key] || 0;
-    const lvl = n === 0 ? "" : n < 3 ? "l1" : n < 6 ? "l2" : n < 10 ? "l3" : "l4";
-    const cls = d > today ? "future" : `${lvl}${+d === +today ? " today" : ""}`;
-    cells.push(`<i class="${cls}" title="${key}: ${n}"></i>`);
+  if (lc) {
+    const dl = lc.daily, potd = state.progress.goals.find((x) => x.metric === "lc_potd");
+    const q = $("daily");
+    q.href = dl.url;
+    q.classList.toggle("cleared", dl.done);
+    q.innerHTML = `<div class="label">Daily quest${potd ? ` · +${potd.xp} XP` : ""}</div>
+      <div class="q-title">${esc(dl.title)}</div>
+      <div class="q-meta"><span class="${dl.difficulty.toLowerCase()}">${esc(dl.difficulty)}</span>
+        <span class="${dl.done ? "acc" : "muted"}"> · ${dl.done ? "Cleared" : "Not cleared"}</span></div>`;
   }
-  heat.innerHTML = cells.join("");
 
-  const p = state.pace || {};
-  $("pace").innerHTML = p.perWeek > 0
-    ? `Pace <b class="num">${p.perWeek}</b>/week${p.next && p.eta ? ` · <b class="num">${p.next}</b> solved by <b class="num">${shortDate(p.eta)}</b>` : ""}`
-    : p.perWeek === 0 ? `No new solves in the last ${p.days} days. Time to start the chain.`
-    : `Your pace shows up after 3 days of history (${p.days || 0}/3).`;
+  const t = g.lcNext;
+  $("lcTarget").innerHTML = t ? `
+    <div class="t-head"><span class="label">Next target · LeetCode</span><span class="t-val num">${t.value}<span> / ${t.to}</span></span></div>
+    <div class="segs tall">${segs(t.value - t.from, t.to - t.from)}</div>
+    <div class="sub"><b>${t.to - t.value}</b> ${t.to - t.value === 1 ? "solve" : "solves"} to unlock <b>+${xpFor("LeetCode")} XP</b></div>` : "";
 
-  const dl = lc.daily;
-  const reset = new Date(); reset.setUTCHours(24, 0, 0, 0);
-  $("dailyReset").textContent = `new in ${until((reset - Date.now()) / 1000)}`;
-  $("daily").href = dl.url;
-  $("daily").innerHTML = `<div class="title">${esc(dl.title)}</div>
-    <div class="meta"><span class="${dl.difficulty.toLowerCase()}">${esc(dl.difficulty)}</span>
-    <span class="${dl.done ? "done" : ""}">${dl.done ? "Solved" : "Not solved yet"}</span></div>`;
+  const c = g.cfNext;
+  $("cfTarget").innerHTML = c ? `
+    <div class="t-head"><span class="label">Next target · Codeforces</span><span class="t-val num">${c.value}<span> / ${c.to}</span></span></div>
+    <div class="segs tall">${segs(((c.value - c.from) / (c.to - c.from)) * 10)}</div>
+    <div class="sub"><b>${c.to - c.value}</b> rating to go · +${xpFor("Codeforces")} XP${c.lastDelta != null ? ` · last round ${c.lastDelta >= 0 ? "+" : ""}${c.lastDelta}` : ""}${c.rank ? ` · ${esc(c.rank)}` : ""}</div>`
+    : `<div class="label">Codeforces</div><div class="sub">Rating shows up once the Codeforces API answers.</div>`;
 
-  const seen = new Set();
-  const rec = lc.recent.filter((r) => !seen.has(r.slug) && seen.add(r.slug)).slice(0, 3);
-  $("recent").innerHTML = rec.length ? rec.map((r) => `<li><span class="main">${esc(r.title)}</span>
-    <span class="side num">${agoTs(r.ts)}</span></li>`).join("") : `<li class="empty">No accepted solves yet.</li>`;
-
-  const now = Date.now() / 1000;
-  const cs = state.contests.slice(0, 3);
-  $("contests").innerHTML = cs.length ? cs.map((c) => {
-    const d = new Date(c.start * 1000);
-    const live = c.start <= now;
-    return `<li class="${live ? "now" : ""}"><span class="t">${c.site === "LeetCode" ? "LC" : "CF"}</span>
-      <span class="main">${esc(c.name)}</span>
-      <span class="side num">${live ? "live" : `${DAYS[d.getDay()].slice(0, 3)} ${hm(d)} · ${until(c.start - now)}`}</span></li>`;
-  }).join("") : `<li class="empty">No contests in the next week.</li>`;
+  if (g.todaySubs !== undefined) {
+    const a = g.todaySubs, b = g.yesterdaySubs, need = b - a + 1;
+    $("duel").innerHTML = `<span class="label">Today vs yesterday</span>
+      <span class="vs num">${a}<span>vs</span>${b}</span>
+      <span class="sub ${a > b ? "win" : ""}">${a > b ? "Day won" : `${need} more to win the day`}</span>`;
+  }
+  renderTimers();
 }
 
-const PERIOD_TAG = { day: "Today", week: "Week", month: "Month" };
+function xpFor(track) {
+  return state.progress.milestones.find((m) => m.track === track)?.xp ?? 0;
+}
+
+// Runs every second from tick(): streak countdown and next-contest countdown.
+function renderTimers() {
+  const g = state?.grind;
+  if (!g) return;
+  const now = Date.now() / 1000;
+  if (g.dayEnds) {
+    const left = g.dayEnds - now;
+    const risky = !g.safeToday;
+    $("streakState").textContent = risky ? "Streak · at risk" : "Streak · safe today";
+    $("streakState").classList.toggle("danger", risky && left < 6 * 3600);
+    $("streakTimer").textContent = risky ? `Breaks in ${hms(left)}` : `Next day in ${hms(left)}`;
+    $("streakTimer").classList.toggle("danger", risky);
+  }
+  const c = (state.contests || []).find((x) => x.start + x.duration > now);
+  $("raid").innerHTML = c
+    ? `<span class="label">Next contest</span><span class="r-name">${esc(c.name)}</span>
+       <span class="r-time num">${c.start <= now ? "LIVE" : hms(c.start - now)}</span>`
+    : `<span class="label">Next contest</span><span class="r-name muted">Nothing this week</span>`;
+}
+
+/* ---------------- goals ---------------- */
+
+const PERIOD_TAG = { day: "Day", week: "Week", month: "Month" };
 
 function renderGoals() {
   const g = state.progress;
   $("lvl").textContent = g.level;
   $("lvlTitle").textContent = g.title;
-  $("xpFill").style.transform = `scaleX(${g.into / g.need})`;
-  $("lvlXp").textContent = `${g.into} / ${g.need} XP to level ${g.level + 1} · ${inr.format(g.xp)} total`;
+  $("xpSegs").innerHTML = segs((g.into / g.need) * 20, 20);
+  $("lvlXp").textContent = `${g.into} / ${g.need} XP to level ${g.level + 1}`;
   $("streak").textContent = g.streak;
-  $("streak").classList.toggle("muted", !g.streak);
-
-  $("milestones").innerHTML = g.milestones.length ? g.milestones.map((m) => {
-    const pct = m.to ? Math.min(1, (m.value - m.from) / (m.to - m.from)) : 1;
-    const left = m.to ? m.to - m.value : 0;
-    return `<li><span class="ms-head"><span>${m.track}</span>
-        <span class="num"><b>${m.value}</b> → ${m.to ?? "max"}</span></span>
-      <span class="bar"><i style="transform:scaleX(${Math.max(0, pct)})"></i></span>
-      <span class="ms-sub">${m.to ? `${left} ${m.unit === "rating" ? "rating" : "problems"} to ${esc(m.name)}` : "Every milestone done"}</span></li>`;
-  }).join("") : `<li class="empty">Milestones appear once LeetCode and Codeforces load.</li>`;
+  $("bestPerfect").textContent = g.bestStreak;
+  $("xpTotal").textContent = inr.format(g.xp);
 
   const got = g.badges.filter((b) => b.got).length;
   $("badgeCount").textContent = `${got}/${g.badges.length}`;
@@ -385,17 +387,17 @@ function renderGoals() {
 
   const order = { day: 0, week: 1, month: 2 };
   const goals = [...g.goals].sort((a, b) => order[a.period] - order[b.period]);
-  const met = goals.filter((x) => x.met).length;
-  $("goalsMore").textContent = `${met}/${goals.length} done`;
+  $("goalsMore").textContent = `${goals.filter((x) => x.met).length}/${goals.length} cleared`;
   $("goals").innerHTML = goals.length ? goals.map((x) => {
-    const v = x.value ?? 0, pct = Math.min(1, v / x.target);
-    const manual = x.metric === "manual";
+    const v = x.value ?? 0, manual = x.metric === "manual";
+    const n = Math.min(x.target, 10);
     return `<li class="${x.met ? "met" : ""}${manual ? "" : " auto"}">
-      <span class="g-label"><span class="g-tag">${PERIOD_TAG[x.period]}</span>${esc(x.label)}<small class="num">+${x.xp} XP${manual ? "" : " · auto"}</small></span>
-      <span class="g-val num"><b>${x.value ?? "—"}</b>/${x.target}</span>
-      ${manual ? `<span class="g-btns"><button class="btn ghost" data-goal="${esc(x.id)}" data-delta="-1" aria-label="Take one off ${esc(x.label)}">−</button><button class="btn" data-goal="${esc(x.id)}" data-delta="1" aria-label="Add one to ${esc(x.label)}">+1</button></span>` : ""}
-      <span class="bar"><i style="transform:scaleX(${pct})"></i></span></li>`;
-  }).join("") : `<li class="empty">No goals yet. Add some from the editor on your laptop (/edit).</li>`;
+      <span class="q-label"><span class="q-tag">${PERIOD_TAG[x.period]}</span>${esc(x.label)}<span class="q-xp num">+${x.xp} XP${manual ? "" : " · auto"}</span></span>
+      <span class="segs">${segs((Math.min(v, x.target) / x.target) * n, n)}</span>
+      <span class="q-val num"><b>${x.value ?? "-"}</b>/${x.target}</span>
+      ${manual ? `<span class="q-btns"><button class="btn ghost" data-goal="${esc(x.id)}" data-delta="-1" aria-label="Take one off ${esc(x.label)}">−</button><button class="btn" data-goal="${esc(x.id)}" data-delta="1" aria-label="Add one to ${esc(x.label)}">+1</button></span>` : ""}
+    </li>`;
+  }).join("") : `<li class="empty">No quests yet. Add some from the editor on your laptop (/edit).</li>`;
 }
 
 $("goals").addEventListener("click", async (e) => {
