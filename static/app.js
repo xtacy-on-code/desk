@@ -58,7 +58,7 @@ function show(i, dir = 1) {
 
 function moveTabInd() {
   const t = tabs[page], ind = $("tabInd");
-  ind.style.transform = `translateX(${t.offsetLeft + 10}px) scaleX(${t.offsetWidth - 20})`;
+  ind.style.transform = `translateX(${t.offsetLeft - 4}px)`;
 }
 addEventListener("resize", moveTabInd);
 
@@ -280,12 +280,12 @@ function renderToday() {
   $("focusTotal").textContent = `Focus ${mins(f.today)} today · ${mins(f.week)} this week`;
 }
 
-/* ---------------- HUD helpers ---------------- */
+/* ---------------- helpers ---------------- */
 
-// n skewed segments, `filled` of them lit; the first unlit one glows faintly as "next".
-function segs(filled, n = 10) {
+// n pill pips with `filled` of them lit (for countable steps).
+function pips(filled, n = 10) {
   const f = Math.max(0, Math.min(n, Math.round(filled)));
-  return Array.from({ length: n }, (_, i) => `<i class="${i < f ? "on" : i === f ? "next" : ""}"></i>`).join("");
+  return Array.from({ length: n }, (_, i) => `<i class="${i < f ? "on" : ""}"></i>`).join("");
 }
 
 function hms(sec) {
@@ -306,51 +306,36 @@ function renderGrind() {
 
     const p = g.potd;
     $("potd").innerHTML = p ? `
-      <div class="t-head"><span class="label">POTD chain</span>
-        <span class="p-val num">${p.streak}${p.atLeast ? "+" : ""}<span> ${p.streak === 1 ? "day" : "days"}</span></span></div>
+      <h2>POTD chain <span class="val disp">${p.streak}${p.atLeast ? "+" : ""} <small>${p.streak === 1 ? "day" : "days"}</small></span></h2>
       <div class="pips" aria-label="POTD solved in the last 14 days">${p.last14.map((d, i) =>
         `<i class="${d ? "on" : d === null ? "unk" : ""}${i === 13 && !d ? " today" : ""}"></i>`).join("")}</div>
-      <div class="sub">${p.doneToday ? `<b class="acc">Today's done</b> · chain grows tomorrow` : `Solve today's POTD to make it ${p.streak + 1}`}</div>`
-      : `<div class="label">POTD chain</div><div class="sub">Starts counting once your solves load.</div>`;
+      <div class="sub">${p.doneToday ? `<b>Today's done</b> · the chain grows tomorrow` : `Solve today's POTD to make it ${p.streak + 1}`}</div>`
+      : `<h2>POTD chain</h2><div class="sub">Starts counting once your solves load.</div>`;
 
     const s = g.solved, parts = [["Easy", "easy"], ["Medium", "medium"], ["Hard", "hard"]];
     $("solved").innerHTML = `
-      <div class="t-head"><span class="label">Solved</span>
-        <span class="p-val num">${s.All}<span> / ${inr.format(g.totalQuestions)}</span></span></div>
+      <h2>Solved <span class="val disp">${s.All} <small>/ ${inr.format(g.totalQuestions)}</small></span></h2>
       <div class="split">${parts.map(([k, c]) => `<i class="${c}" style="flex:${s[k] || 0.01}"></i>`).join("")}</div>
-      <div class="legend">${parts.map(([k, c]) => `<span class="${c}">${k} <b class="num">${s[k]}</b></span>`).join("")}</div>`;
+      <div class="legend">${parts.map(([k, c]) => `<span class="${c}">${k} <b>${s[k]}</b></span>`).join("")}</div>`;
   }
 
   if (lc) {
     const dl = lc.daily, potd = state.progress.goals.find((x) => x.metric === "lc_potd");
     const q = $("daily");
-    q.href = dl.url;
     q.classList.toggle("cleared", dl.done);
-    q.innerHTML = `<div class="label">Daily quest${potd ? ` · +${potd.xp} XP` : ""}</div>
+    q.innerHTML = `<h2>Daily quest${potd ? ` <span class="more">+${potd.xp} XP</span>` : ""}</h2>
       <div class="q-title">${esc(dl.title)}</div>
-      <div class="q-meta"><span class="${dl.difficulty.toLowerCase()}">${esc(dl.difficulty)}</span>
-        <span class="${dl.done ? "acc" : "muted"}"> · ${dl.done ? "Cleared" : "Not cleared"}</span></div>`;
+      <div class="q-foot"><span class="${dl.difficulty.toLowerCase()}">${esc(dl.difficulty)}</span>
+        <span class="muted">${dl.done ? "Cleared" : "Not cleared"}</span>
+        <a class="btn gold" href="${esc(dl.url)}" target="_blank" rel="noopener">${dl.done ? "Open" : "Solve"}</a></div>`;
   }
 
   const t = g.lcNext;
   $("lcTarget").innerHTML = t ? `
-    <div class="t-head"><span class="label">Next target · LeetCode</span><span class="t-val num">${t.value}<span> / ${t.to}</span></span></div>
-    <div class="segs tall">${segs(t.value - t.from, t.to - t.from)}</div>
-    <div class="sub"><b>${t.to - t.value}</b> ${t.to - t.value === 1 ? "solve" : "solves"} to unlock <b>+${xpFor("LeetCode")} XP</b></div>` : "";
-
-  const c = g.cfNext;
-  $("cfTarget").innerHTML = c ? `
-    <div class="t-head"><span class="label">Next target · Codeforces</span><span class="t-val num">${c.value}<span> / ${c.to}</span></span></div>
-    <div class="segs tall">${segs(((c.value - c.from) / (c.to - c.from)) * 10)}</div>
-    <div class="sub"><b>${c.to - c.value}</b> rating to go · +${xpFor("Codeforces")} XP${c.lastDelta != null ? ` · last round ${c.lastDelta >= 0 ? "+" : ""}${c.lastDelta}` : ""}${c.rank ? ` · ${esc(c.rank)}` : ""}</div>`
-    : `<div class="label">Codeforces</div><div class="sub">Rating shows up once the Codeforces API answers.</div>`;
-
-  if (g.todaySubs !== undefined) {
-    const a = g.todaySubs, b = g.yesterdaySubs, need = b - a + 1;
-    $("duel").innerHTML = `<span class="label">Today vs yesterday</span>
-      <span class="vs num">${a}<span>vs</span>${b}</span>
-      <span class="sub ${a > b ? "win" : ""}">${a > b ? "Day won" : `${need} more to win the day`}</span>`;
-  }
+    <h2>Next target <span class="val disp">${t.value} <small>/ ${t.to}</small></span></h2>
+    <div class="pips">${pips(t.value - t.from, t.to - t.from)}</div>
+    <div class="sub"><b>${t.to - t.value}</b> ${t.to - t.value === 1 ? "solve" : "solves"} to unlock <b>+${xpFor("LeetCode")} XP</b></div>`
+    : `<h2>Next target</h2><div class="sub">Shows up once LeetCode loads.</div>`;
   renderTimers();
 }
 
@@ -368,17 +353,18 @@ function renderTimers() {
     const risky = !g.safeToday;
     $("streakState").textContent = risky ? "Streak · at risk" : "Streak · safe today";
     $("streakState").classList.toggle("danger", risky && left < 6 * 3600);
-    $("streakTimer").textContent = risky ? `Breaks in ${hms(left)}` : `Next day in ${hms(left)}`;
+    $("streakTimer").textContent = risky ? `breaks in ${hms(left)}` : `next day in ${hms(left)}`;
     $("streakTimer").classList.toggle("danger", risky);
   }
   const c = (state.contests || []).find((x) => x.start + x.duration > now);
   $("raid").innerHTML = c
-    ? `<span class="label">Next contest</span><span class="r-name">${esc(c.name)}</span>
-       <span class="r-time num">${c.start <= now ? "LIVE" : hms(c.start - now)}</span>`
-    : `<span class="label">Next contest</span><span class="r-name muted">Nothing this week</span>`;
+    ? `<h2>Next contest <span class="more">${esc(c.site)}</span></h2>
+       <div class="r-row"><span class="r-name">${esc(c.name)}</span>
+       <span class="r-time disp">${c.start <= now ? "LIVE" : hms(c.start - now)}</span></div>`
+    : `<h2>Next contest</h2><div class="sub">Nothing in the next week.</div>`;
 }
 
-/* ---------------- goals ---------------- */
+/* ---------------- quests ---------------- */
 
 const PERIOD_TAG = { day: "Day", week: "Week", month: "Month" };
 
@@ -386,7 +372,7 @@ function renderGoals() {
   const g = state.progress;
   $("lvl").textContent = g.level;
   $("lvlTitle").textContent = g.title;
-  $("xpSegs").innerHTML = segs((g.into / g.need) * 20, 20);
+  $("xpFill").style.transform = `scaleX(${g.into / g.need})`;
   $("lvlXp").textContent = `${g.into} / ${g.need} XP to level ${g.level + 1}`;
   $("streak").textContent = g.streak;
   $("bestPerfect").textContent = g.bestStreak;
@@ -400,13 +386,15 @@ function renderGoals() {
   const goals = [...g.goals].sort((a, b) => order[a.period] - order[b.period]);
   $("goalsMore").textContent = `${goals.filter((x) => x.met).length}/${goals.length} cleared`;
   $("goals").innerHTML = goals.length ? goals.map((x) => {
-    const v = x.value ?? 0, manual = x.metric === "manual";
-    const n = Math.min(x.target, 10);
+    const v = Math.min(x.value ?? 0, x.target), manual = x.metric === "manual";
+    const progress = x.target <= 10
+      ? `<span class="pips">${pips(v, x.target)}</span>`
+      : `<span class="bar"><i style="transform:scaleX(${v / x.target})"></i></span>`;
     return `<li class="${x.met ? "met" : ""}${manual ? "" : " auto"}">
-      <span class="q-label"><span class="q-tag">${PERIOD_TAG[x.period]}</span>${esc(x.label)}<span class="q-xp num">+${x.xp} XP${manual ? "" : " · auto"}</span></span>
-      <span class="segs">${segs((Math.min(v, x.target) / x.target) * n, n)}</span>
-      <span class="q-val num"><b>${x.value ?? "-"}</b>/${x.target}</span>
-      ${manual ? `<span class="q-btns"><button class="btn ghost" data-goal="${esc(x.id)}" data-delta="-1" aria-label="Take one off ${esc(x.label)}">−</button><button class="btn" data-goal="${esc(x.id)}" data-delta="1" aria-label="Add one to ${esc(x.label)}">+1</button></span>` : ""}
+      <span class="q-label"><span class="q-tag">${PERIOD_TAG[x.period]}</span>${esc(x.label)}<span class="q-xp">+${x.xp} XP${manual ? "" : " · auto"}</span></span>
+      ${progress}
+      <span class="q-val"><b>${x.value ?? "-"}</b> / ${x.target}</span>
+      ${manual ? `<span class="q-btns"><button class="btn ghost" data-goal="${esc(x.id)}" data-delta="-1" aria-label="Take one off ${esc(x.label)}">−</button><button class="btn gold" data-goal="${esc(x.id)}" data-delta="1" aria-label="Add one to ${esc(x.label)}">+1</button></span>` : ""}
     </li>`;
   }).join("") : `<li class="empty">No quests yet. Add some from the editor on your laptop (/edit).</li>`;
 }
