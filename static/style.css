@@ -57,6 +57,7 @@ ul { list-style: none; }
   display: flex; flex-direction: column;
 }
 .gl.grow { flex: 1; }
+.gl > * { flex-shrink: 0; }
 h2 {
   display: flex; align-items: baseline; gap: 8px;
   font: 400 11px/1.2 var(--display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted);
@@ -199,15 +200,24 @@ h2 .val small { font-size: 11px; color: var(--muted); }
 /* ---------- grind ---------- */
 #streakState.danger { color: var(--danger); }
 .streak-hero { display: flex; align-items: center; gap: 14px; }
-.hero { font-size: 70px; line-height: 0.95; color: var(--gold); }
+.hero { font-size: 64px; line-height: 0.95; color: var(--gold); }
 .unit { font-size: 14px; }
 .timer { font-size: 13px; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
 .timer.danger { color: var(--danger); }
 .potd { margin-top: 8px; }
 .potd .pips { margin: 6px 0 4px; }
-.solved { justify-content: center; }
-.split { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 2px; margin: 4px 0 8px; }
-.legend { display: flex; gap: 16px; font-size: 13px; }
+.solved { justify-content: center; padding-top: 9px; padding-bottom: 9px; }
+.solved h2 { padding-bottom: 4px; }
+.split { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 2px; margin: 2px 0 7px; }
+.s-row { display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: end; }
+.legend { display: flex; flex-direction: column; gap: 1px; font-size: 12px; }
+.week { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.w-head { display: flex; justify-content: space-between; font: 400 10px/1 var(--display); color: var(--muted); }
+.w-head span:last-child { color: var(--gold); }
+.w-bars { display: flex; align-items: flex-end; gap: 5px; height: 30px; }
+.w-bars i { flex: 1; border-radius: 3px; background: var(--gold); }
+.w-bars i.zero { background: var(--track); }
+.w-bars i.today.zero { background: none; box-shadow: inset 0 0 0 1px var(--danger); }
 .legend b { font-weight: 500; }
 .easy { color: var(--easy); } .medium { color: var(--med); } .hard { color: var(--hard); }
 .split .easy { background: var(--easy); } .split .medium { background: var(--med); } .split .hard { background: var(--hard); }
@@ -217,9 +227,11 @@ h2 .val small { font-size: 11px; color: var(--muted); }
 .quest.cleared { border-color: color-mix(in srgb, var(--gold) 55%, transparent); }
 #lcTarget .pips { margin: 4px 0 6px; }
 .raid { justify-content: center; }
-.raid .r-row { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
-.raid .r-name { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.raid .r-time { margin-left: auto; font-size: 22px; color: var(--gold); white-space: nowrap; }
+.raid .r-row { display: flex; align-items: baseline; gap: 10px; min-width: 0; padding: 3px 0; }
+.raid .r-row + .r-row { border-top: 1px solid rgba(255, 255, 255, 0.07); }
+.raid .r-site { font-size: 10px; color: var(--muted); width: 18px; flex: none; }
+.raid .r-name { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.raid .r-time { margin-left: auto; font-size: 17px; color: var(--gold); white-space: nowrap; }
 
 /* ---------- quests ---------- */
 .lvl { flex-direction: row; align-items: center; gap: 14px; }

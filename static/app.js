@@ -316,7 +316,10 @@ function renderGrind() {
     $("solved").innerHTML = `
       <h2>Solved <span class="val disp">${s.All} <small>/ ${inr.format(g.totalQuestions)}</small></span></h2>
       <div class="split">${parts.map(([k, c]) => `<i class="${c}" style="flex:${s[k] || 0.01}"></i>`).join("")}</div>
-      <div class="legend">${parts.map(([k, c]) => `<span class="${c}">${k} <b>${s[k]}</b></span>`).join("")}</div>`;
+      <div class="s-row">
+        <div class="legend">${parts.map(([k, c]) => `<span class="${c}">${k} <b>${s[k]}</b></span>`).join("")}</div>
+        ${weekBars(g.last7 || [])}
+      </div>`;
   }
 
   if (lc) {
@@ -339,6 +342,17 @@ function renderGrind() {
   renderTimers();
 }
 
+// Last 7 LeetCode days as little gold bars; today is outlined until you submit.
+function weekBars(days) {
+  if (!days.length) return "";
+  const max = Math.max(1, ...days.map((d) => d.n)), total = days.reduce((a, d) => a + d.n, 0);
+  return `<div class="week">
+    <div class="w-head"><span>Last 7 days</span><span>${total}</span></div>
+    <div class="w-bars" aria-label="Submissions over the last 7 days">${days.map((d, i) =>
+      `<i class="${d.n ? "" : "zero"}${i === days.length - 1 ? " today" : ""}" style="height:${d.n ? Math.max(12, (d.n / max) * 100) : 12}%" title="${d.date}: ${d.n}"></i>`).join("")}</div>
+  </div>`;
+}
+
 function xpFor(track) {
   return state.progress.milestones.find((m) => m.track === track)?.xp ?? 0;
 }
@@ -356,12 +370,13 @@ function renderTimers() {
     $("streakTimer").textContent = risky ? `breaks in ${hms(left)}` : `next day in ${hms(left)}`;
     $("streakTimer").classList.toggle("danger", risky);
   }
-  const c = (state.contests || []).find((x) => x.start + x.duration > now);
-  $("raid").innerHTML = c
-    ? `<h2>Next contest <span class="more">${esc(c.site)}</span></h2>
-       <div class="r-row"><span class="r-name">${esc(c.name)}</span>
-       <span class="r-time disp">${c.start <= now ? "LIVE" : hms(c.start - now)}</span></div>`
-    : `<h2>Next contest</h2><div class="sub">Nothing in the next week.</div>`;
+  const cs = (state.contests || []).filter((x) => x.start + x.duration > now).slice(0, 2);
+  $("raid").innerHTML = cs.length
+    ? `<h2>Next contests</h2>${cs.map((c) => `
+       <div class="r-row"><span class="r-site disp">${c.site === "LeetCode" ? "LC" : "CF"}</span>
+       <span class="r-name">${esc(c.name)}</span>
+       <span class="r-time disp">${c.start <= now ? "LIVE" : hms(c.start - now)}</span></div>`).join("")}`
+    : `<h2>Next contests</h2><div class="sub">Nothing in the next week.</div>`;
 }
 
 /* ---------------- quests ---------------- */
