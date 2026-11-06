@@ -3,7 +3,7 @@
 The Galaxy A13 runs a small Python server in Termux and shows the dashboard full-screen in landscape.
 
 - **Today:** clock, date, weather, countdowns, a focus timer that logs your minutes, and your class schedule. Once today's last class ends, the schedule switches to the next day that has classes.
-- **Grind:** your LeetCode streak with a live countdown to when it breaks (05:30 IST), how far you are from your best streak, the daily problem as a quest, tiny next targets (the next 10 LeetCode solves, the next 25 Codeforces rating), today's submissions against yesterday's, and a countdown to the next contest.
+- **Grind:** your LeetCode streak with a live countdown to when it breaks (05:30 IST), your POTD chain (days in a row you solved the problem of the day, with the last 14 days as pips), problems solved split into Easy, Medium and Hard, the daily problem as a quest, tiny next targets (the next 10 LeetCode solves, the next 25 Codeforces rating), today's submissions against yesterday's, and a countdown to the next contest.
 - **Goals:** daily, weekly and monthly goals that earn XP. XP fills levels, perfect days build a streak, and badges unlock along the way. Quests sit on the right, with your level, perfect-day streak and badges on the left. A toast in the top bar shows each XP gain.
 
 **Extras:**
@@ -140,10 +140,11 @@ Edit the file in Termux with `nano ~/phone-dashboard/config.json`, or edit the l
 
 ## Where your data lives
 
-The `data/` folder holds `events.json` (exams and tests), `goals.json` (your goals), `counters.json` (+1 counts), `xp.json` (XP, streak and milestones), `focus.json` (focus minutes per day) and `pin.txt`. To back it up, copy the folder somewhere. Delete `pin.txt` to get a new PIN.
+The `data/` folder holds `events.json` (exams and tests), `goals.json` (your goals), `counters.json` (+1 counts), `xp.json` (XP, streak and milestones), `potd.json` (which days you solved the POTD), `focus.json` (focus minutes per day) and `pin.txt`. To back it up, copy the folder somewhere. Delete `pin.txt` to get a new PIN.
 
 ## Notes
 
+- The **POTD chain** shows `8+` at first: LeetCode's public data only covers your last 20 accepted submissions (about a week), so the server starts its own log from there. Days before that show as hollow pips.
 - The look is a game-style HUD in the **Chakra Petch** font, bundled in `static/fonts/` (SIL Open Font License, see `OFL.txt`), so it works offline.
 - **"Solved today"** on the daily problem is based on LeetCode's reset time (05:30 IST).
 - LeetCode's data comes from the same unofficial GraphQL endpoint the LeetCode website uses. If LeetCode changes it, the Grind page shows a "LeetCode failed" status in the top bar until it's fixed.
