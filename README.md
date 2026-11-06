@@ -129,6 +129,7 @@ Open the Termux:Boot app once so Android allows it to run at startup.
 |---|---|
 | `leetcode_username` | Your LeetCode username (currently `xtacy`) |
 | `codeforces_handle` | Your Codeforces handle (currently `VedantZ`), for rating, rank and contest goals |
+| `potd_streak_seed` | Your real POTD streak, told once: `{"days": 69, "through": "2026-11-05"}` (the last day it covers, in LeetCode's UTC days). LeetCode only shows this number when you're logged in, so the server starts from it and keeps counting with its own log |
 | `city` | Weather location (currently `"Bhilai"`). If left empty, the weather line is hidden |
 | `timetable` | Weekly classes, as `"mon": [["09:30", "10:30", "Compiler", "LHC 104"], ...]` (start, end, name, room) |
 | `ical_feeds` | Classroom or Moodle calendar links for assignment deadlines (see section 7) |
@@ -177,7 +178,7 @@ The `data/` folder holds `events.json` (exams and tests), `goals.json` (your goa
 
 ## Notes
 
-- The **POTD chain** shows `8+` at first: LeetCode's public data only covers your last 20 accepted submissions (about a week), so the server starts its own log from there. Days before that show as hollow pips.
+- The **POTD chain** starts from `potd_streak_seed` and then counts from the server's own log, because LeetCode's public data only covers your last 20 accepted submissions. Without a seed it shows something like `8+`. Keep the server running daily (or at least every few days) so no solved day gets missed.
 - The look is "Royal loot": purple and gold with soft glass panels, in the **Bungee** (numbers and labels) and **Rubik** (text) fonts. Both are bundled in `static/fonts/` under the SIL Open Font License (see the `OFL-*.txt` files), so it works offline.
 - **"Solved today"** on the daily problem is based on LeetCode's reset time (05:30 IST).
 - LeetCode's data comes from the same unofficial GraphQL endpoint the LeetCode website uses. If LeetCode changes it, the Grind page shows a "LeetCode failed" status in the top bar until it's fixed.
