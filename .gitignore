@@ -1,0 +1,6 @@
+# user data: PIN, location, trackers
+data/
+
+# python
+__pycache__/
+*.pyc
