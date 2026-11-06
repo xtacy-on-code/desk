@@ -47,6 +47,9 @@
     td select { min-height: 40px; padding: 6px 10px; }
     .muted { color: var(--muted); }
     .empty { color: var(--faint); padding: 14px 0; }
+    .actions { display: flex; gap: 10px; margin-top: 14px; }
+    table.goals input, table.goals select { min-height: 40px; padding: 6px 10px; }
+    table.goals .target { width: 90px; }
     .pinrow { display: flex; gap: 10px; align-items: end; max-width: 360px; }
     @media (max-width: 640px) {
       table, thead, tbody, tr, td { display: block; } thead { display: none; }
@@ -58,7 +61,7 @@
 <body>
 <main>
   <h1>Desk editor</h1>
-  <p class="sub">Changes show up on the desk dashboard within a minute.</p>
+  <p class="sub">Exams and goals for the desk dashboard. Changes show up on the phone within a minute.</p>
 
   <section id="pinBox">
     <h2>Unlock</h2>
@@ -88,30 +91,22 @@
       <tbody id="evRows"></tbody>
     </table>
 
-    <h2>Add an application</h2>
-    <form id="add">
-      <div class="field"><label for="company">Company</label><input id="company" name="company" required autocomplete="off"></div>
-      <div class="field"><label for="role">Role</label><input id="role" name="role" value="SWE Intern" autocomplete="off"></div>
-      <div class="field">
-        <label for="stage">Stage</label>
-        <select id="stage" name="stage"></select>
-      </div>
-      <div class="field"><label for="applied">Applied on</label><input id="applied" name="applied" type="date"></div>
-      <div class="field"><label for="via">How</label><input id="via" name="via" placeholder="Referral, cold DM, careers page…" autocomplete="off"></div>
-      <div class="field"><button class="primary" type="submit">Add</button></div>
-    </form>
-    <p class="msg" id="addMsg" role="status"></p>
-
-    <h2>All applications</h2>
-    <table>
-      <thead><tr><th>Company</th><th>Role</th><th>How</th><th>Applied</th><th>Stage</th><th></th></tr></thead>
-      <tbody id="rows"></tbody>
+    <h2>Goals</h2>
+    <p class="sub">Daily goals reset at midnight, weekly ones on Monday, monthly ones on the 1st.
+      Auto goals track themselves; manual ones get +1 buttons on the phone's Goals page.</p>
+    <table class="goals">
+      <thead><tr><th>Goal</th><th>Resets</th><th>Tracked by</th><th>Target</th><th></th></tr></thead>
+      <tbody id="goalRows"></tbody>
     </table>
+    <div class="actions">
+      <button id="addGoal">Add a goal</button>
+      <button class="primary" id="saveGoals">Save goals</button>
+    </div>
+    <p class="msg" id="goalMsg" role="status"></p>
   </section>
 </main>
 <script>
 "use strict";
-const STAGES = ["Applied", "OA", "Interview", "Offer", "Rejected", "Ghosted"];
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -147,8 +142,6 @@ async function unlock() {
 $("pinBtn").addEventListener("click", () => { pin = $("pin").value.trim(); unlock(); });
 $("pin").addEventListener("keydown", (e) => { if (e.key === "Enter") $("pinBtn").click(); });
 
-$("stage").innerHTML = STAGES.map((s) => `<option>${s}</option>`).join("");
-$("applied").value = new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
 
 const KINDS = ["Exam", "Test", "Quiz", "Lab exam", "Viva", "Due", "OA", "Event"];
 $("evKind").innerHTML = KINDS.map((k) => `<option>${k}</option>`).join("");
@@ -177,8 +170,57 @@ $("evRows").addEventListener("click", async (e) => {
   load();
 });
 
+const METRIC_NAMES = {
+  manual: "Me (+1 on phone)", lc_potd: "LeetCode POTD (auto)", lc_solved: "LeetCode problems (auto)",
+  cf_contests: "Codeforces contests (auto)", focus_min: "Focus minutes (auto)",
+};
+const PERIOD_NAMES = { day: "Daily", week: "Weekly", month: "Monthly" };
+let goals = [];
+
+function goalRow(g, i) {
+  const opts = (map, cur) => Object.entries(map).map(([v, n]) => `<option value="${v}"${v === cur ? " selected" : ""}>${n}</option>`).join("");
+  return `<tr data-i="${i}">
+    <td><input data-f="label" value="${esc(g.label)}" aria-label="Goal name" maxlength="60"></td>
+    <td><select data-f="period" aria-label="Resets">${opts(PERIOD_NAMES, g.period)}</select></td>
+    <td><select data-f="metric" aria-label="Tracked by">${opts(METRIC_NAMES, g.metric)}</select></td>
+    <td><input data-f="target" type="number" min="1" max="10000" value="${esc(g.target)}" aria-label="Target" class="target"></td>
+    <td><button class="danger" data-delgoal aria-label="Remove ${esc(g.label)}">Remove</button></td>
+  </tr>`;
+}
+
+function drawGoals() {
+  $("goalRows").innerHTML = goals.length ? goals.map(goalRow).join("")
+    : `<tr><td colspan="5" class="empty">No goals. Add one below.</td></tr>`;
+}
+
+$("goalRows").addEventListener("input", (e) => {
+  const f = e.target.dataset.f, tr = e.target.closest("tr");
+  if (f) goals[+tr.dataset.i][f] = f === "target" ? +e.target.value : e.target.value;
+});
+$("goalRows").addEventListener("click", (e) => {
+  if (!e.target.matches("[data-delgoal]")) return;
+  goals.splice(+e.target.closest("tr").dataset.i, 1);
+  drawGoals();
+});
+$("addGoal").addEventListener("click", () => {
+  goals.push({ label: "", period: "day", metric: "manual", target: 1 });
+  drawGoals();
+  $("goalRows").querySelector("tr:last-child input").focus();
+});
+$("saveGoals").addEventListener("click", async () => {
+  try {
+    const r = await api("PUT", "/api/goals", { goals });
+    goals = r.goals; drawGoals();
+    $("goalMsg").textContent = "Saved. The phone picks it up within a minute.";
+    $("goalMsg").className = "msg";
+  } catch (err) {
+    $("goalMsg").textContent = err.message;
+    $("goalMsg").className = "msg err";
+  }
+});
+
 async function load() {
-  const { tracker, events } = await (await fetch("/api/state")).json();
+  const { events, progress } = await (await fetch("/api/state")).json();
   $("evRows").innerHTML = events.length ? events.map((ev) => `
     <tr data-id="${esc(ev.id)}">
       <td class="muted">${esc(ev.kind)}</td>
@@ -187,47 +229,9 @@ async function load() {
       <td class="muted">${esc(ev.where)}</td>
       <td><button class="danger" data-del aria-label="Delete ${esc(ev.title)}">Delete</button></td>
     </tr>`).join("") : `<tr><td colspan="5" class="empty">No exams or tests added yet.</td></tr>`;
-  $("rows").innerHTML = tracker.length ? tracker.map((a) => `
-    <tr data-id="${esc(a.id)}">
-      <td>${esc(a.company)}</td>
-      <td class="muted">${esc(a.role)}</td>
-      <td class="muted">${esc(a.via)}</td>
-      <td class="num">${fmt(a.applied)}</td>
-      <td><select aria-label="Stage for ${esc(a.company)}">${STAGES.map((s) =>
-        `<option${s === a.stage ? " selected" : ""}>${s}</option>`).join("")}</select></td>
-      <td><button class="danger" data-del aria-label="Delete ${esc(a.company)}">Delete</button></td>
-    </tr>`).join("") : `<tr><td colspan="6" class="empty">Nothing yet. Add your first application above.</td></tr>`;
+  goals = progress.defs.map((g) => ({ ...g }));
+  drawGoals();
 }
-
-$("add").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const body = Object.fromEntries(new FormData(e.target));
-  try {
-    await api("POST", "/api/tracker", body);
-    $("addMsg").textContent = `Added ${body.company}.`;
-    $("addMsg").className = "msg";
-    $("company").value = ""; $("via").value = "";
-    $("company").focus();
-    load();
-  } catch (err) {
-    $("addMsg").textContent = err.message;
-    $("addMsg").className = "msg err";
-  }
-});
-
-$("rows").addEventListener("change", async (e) => {
-  const tr = e.target.closest("tr");
-  try { await api("PUT", `/api/tracker/${tr.dataset.id}`, { stage: e.target.value }); }
-  catch (err) { alert(err.message); load(); }
-});
-
-$("rows").addEventListener("click", async (e) => {
-  if (!e.target.matches("[data-del]")) return;
-  const tr = e.target.closest("tr");
-  if (!confirm(`Delete ${tr.cells[0].textContent}?`)) return;
-  await api("DELETE", `/api/tracker/${tr.dataset.id}`);
-  load();
-});
 
 unlock();
 </script>
