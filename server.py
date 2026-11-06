@@ -45,7 +45,11 @@ def save_json(path, value):
 
 
 def config():
-    return load_json(os.path.join(ROOT, "config.json"), {})
+    """config.json holds the defaults (it's in git). data/config.json, if present, holds this
+    phone's own settings and wins key by key, so `git pull` never touches personal settings."""
+    cfg = load_json(os.path.join(ROOT, "config.json"), {})
+    cfg.update(load_json(os.path.join(DATA, "config.json"), {}))
+    return cfg
 
 
 def data_path(name):
