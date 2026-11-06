@@ -7,7 +7,6 @@ const pad = (n) => String(n).padStart(2, "0");
 const inr = new Intl.NumberFormat("en-IN");
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const STAGES = ["Applied", "OA", "Interview", "Offer", "Rejected"];
 
 let state = null;
 let page = 0;
@@ -27,11 +26,6 @@ function until(sec) {
   return `${m}m`;
 }
 
-function ago(isoDate) {
-  const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(isoDate + "T00:00").getTime()) / 864e5);
-  return days <= 0 ? "today" : days === 1 ? "1d" : `${days}d`;
-}
-
 function mins(m) {
   if (!m) return "0m";
   const h = Math.floor(m / 60);
@@ -43,14 +37,32 @@ function mins(m) {
 const pages = [...document.querySelectorAll(".page")];
 const tabs = [...document.querySelectorAll(".tab")];
 
-function show(i) {
-  page = (i + pages.length) % pages.length;
+function show(i, dir = 1) {
+  const next = (i + pages.length) % pages.length;
+  if (next !== page) {
+    // Enter from the side you're heading to, leave towards the other: swipes feel spatial.
+    const inc = pages[next], out = pages[page];
+    inc.style.transition = "none";
+    inc.style.transform = `translateX(${12 * dir}px)`;
+    void inc.offsetWidth;
+    inc.style.transition = "";
+    inc.style.transform = "";
+    out.style.transform = `translateX(${-12 * dir}px)`;
+  }
+  page = next;
   pages.forEach((p, n) => p.classList.toggle("is-active", n === page));
   tabs.forEach((t, n) => n === page ? t.setAttribute("aria-current", "page") : t.removeAttribute("aria-current"));
   $("topClock").hidden = page === 0;
+  moveTabInd();
 }
 
-tabs.forEach((t) => t.addEventListener("click", () => { lastTouch = Date.now(); show(+t.dataset.page); }));
+function moveTabInd() {
+  const t = tabs[page], ind = $("tabInd");
+  ind.style.transform = `translateX(${t.offsetLeft + 10}px) scaleX(${t.offsetWidth - 20})`;
+}
+addEventListener("resize", moveTabInd);
+
+tabs.forEach((t) => t.addEventListener("click", () => { lastTouch = Date.now(); show(+t.dataset.page, Math.sign(+t.dataset.page - page) || 1); }));
 
 // Swipe between pages
 let downX = null;
@@ -59,7 +71,7 @@ $("pages").addEventListener("pointerup", (e) => {
   if (downX === null) return;
   const dx = e.clientX - downX;
   downX = null;
-  if (Math.abs(dx) > 50) { lastTouch = Date.now(); show(page + (dx < 0 ? 1 : -1)); }
+  if (Math.abs(dx) > 50) { lastTouch = Date.now(); show(page + (dx < 0 ? 1 : -1), dx < 0 ? 1 : -1); }
 });
 document.addEventListener("pointerdown", () => { lastTouch = Date.now(); });
 
@@ -209,7 +221,8 @@ function render() {
   renderTop();
   renderToday();
   renderGrind();
-  renderHunt();
+  renderGoals();
+  celebrate();
   renderFocus(true);
 }
 
@@ -233,7 +246,7 @@ function renderContestAlert() {
 function renderToday() {
   const w = state.weather;
   $("weather").innerHTML = w
-    ? `<b>${w.temp}°</b> ${esc(w.text)} · feels ${w.feels}° · ${w.hi}°/${w.lo}° · rain ${w.rain}% · ${esc(w.place)}`
+    ? `<b>${w.temp}°</b> ${esc(w.text)} · feels ${w.feels}° · ${w.hi}°/${w.lo}° · rain ${w.rain}%`
     : `Set <code class="num">"city"</code> in config.json for weather`;
 
   const today = new Date().setHours(0, 0, 0, 0);
@@ -253,20 +266,33 @@ function renderToday() {
 
   const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
   const sch = state.schedule;
-  $("schedule").innerHTML = sch.length ? sch.map((s) => {
+  $("schedLabel").textContent = sch.isToday ? "Schedule" : `Schedule · ${sch.label}`;
+  $("schedule").innerHTML = sch.items.length ? sch.items.map((s) => {
     const st = toMin(s.start), en = s.end ? toMin(s.end) : st + 60;
-    const cls = s.start && nowMin >= st && nowMin < en ? "now" : s.start && nowMin >= en ? "past" : "";
+    const cls = !sch.isToday ? "" : s.start && nowMin >= st && nowMin < en ? "now" : s.start && nowMin >= en ? "past" : "";
     const kind = s.kind ? `<span class="kind kind-${esc(s.kind.replace(/\s/g, ""))}">${esc(s.kind)}</span>` : "";
     return `<li class="${cls}"><span class="t num">${esc(s.start || "—")}</span>
             <span class="main">${kind}${esc(s.title)}</span><span class="side">${esc(s.where)}</span></li>`;
-  }).join("") : `<li class="empty">Nothing scheduled today. Add classes to <code>"timetable"</code> in config.json.</li>`;
+  }).join("") : `<li class="empty">Nothing scheduled this week. Add classes to <code>"timetable"</code> in config.json.</li>`;
 
   const f = state.focus;
-  $("focusTotal").textContent = `Focus today ${mins(f.today)} · this week ${mins(f.week)}`;
+  $("focusTotal").textContent = `Focus ${mins(f.today)} today · ${mins(f.week)} this week`;
+}
+
+function agoTs(ts) {
+  const s = Date.now() / 1000 - ts;
+  if (s < 3600) return `${Math.max(1, Math.round(s / 60))}m`;
+  if (s < 86400) return `${Math.round(s / 3600)}h`;
+  return `${Math.round(s / 86400)}d`;
+}
+
+function shortDate(iso) {
+  const d = new Date(iso + "T00:00");
+  return `${pad(d.getDate())} ${MONTHS[d.getMonth()]}`;
 }
 
 function renderGrind() {
-  const lc = state.leetcode;
+  const lc = state.leetcode, cf = state.codeforces;
   if (!lc) {
     $("solvedTotal").textContent = "—";
     $("daily").innerHTML = `<span class="sk" style="width:80%"></span><span class="sk" style="width:40%"></span>`;
@@ -279,14 +305,18 @@ function renderGrind() {
   $("split").innerHTML = parts.map(([k, c]) => `<i style="flex:${s[k] || 0.01};background:${c}"></i>`).join("");
   $("legend").innerHTML = parts.map(([k, c]) =>
     `<span><i class="dot" style="background:${c}"></i>${k}<b>${s[k]}</b></span>`).join("");
+
+  const cfRating = cf?.rating;
   $("stats").innerHTML = `
     <div><b class="${lc.streak ? "" : "muted"}">${lc.streak}</b><span>day streak</span></div>
-    <div><b>${lc.activeDays}</b><span>active days</span></div>
-    <div><b>${lc.contestRating ?? "—"}</b><span>${lc.contestRating ? "contest rating" : "no contests yet"}</span></div>
-    <div><b>${inr.format(lc.ranking)}</b><span>global rank</span></div>`;
+    <div><b>${state.lcWeek ?? "—"}</b><span>subs this week</span></div>
+    <div><b>${lc.contestRating ?? "—"}</b><span>LC rating</span></div>
+    <div><b>${cfRating ?? "—"}</b><span>${cf ? `CF · ${esc(cf.rank)}` : "CF rating"}</span></div>`;
 
-  // 18-week heatmap (columns = weeks, Monday on top)
-  const weeks = 18, today = new Date(); today.setHours(0, 0, 0, 0);
+  // Heatmap: as many weeks as fit the column (columns = weeks, Monday on top)
+  const heat = $("heat");
+  const weeks = Math.max(10, Math.floor((heat.clientWidth + 2) / 11));
+  const today = new Date(); today.setHours(0, 0, 0, 0);
   const start = new Date(today); start.setDate(today.getDate() - ((today.getDay() + 6) % 7) - (weeks - 1) * 7);
   const cells = [];
   for (let i = 0; i < weeks * 7; i++) {
@@ -297,16 +327,29 @@ function renderGrind() {
     const cls = d > today ? "future" : `${lvl}${+d === +today ? " today" : ""}`;
     cells.push(`<i class="${cls}" title="${key}: ${n}"></i>`);
   }
-  $("heat").innerHTML = cells.join("");
+  heat.innerHTML = cells.join("");
+
+  const p = state.pace || {};
+  $("pace").innerHTML = p.perWeek > 0
+    ? `Pace <b class="num">${p.perWeek}</b>/week${p.next && p.eta ? ` · <b class="num">${p.next}</b> solved by <b class="num">${shortDate(p.eta)}</b>` : ""}`
+    : p.perWeek === 0 ? `No new solves in the last ${p.days} days. Time to start the chain.`
+    : `Your pace shows up after 3 days of history (${p.days || 0}/3).`;
 
   const dl = lc.daily;
+  const reset = new Date(); reset.setUTCHours(24, 0, 0, 0);
+  $("dailyReset").textContent = `new in ${until((reset - Date.now()) / 1000)}`;
   $("daily").href = dl.url;
   $("daily").innerHTML = `<div class="title">${esc(dl.title)}</div>
     <div class="meta"><span class="${dl.difficulty.toLowerCase()}">${esc(dl.difficulty)}</span>
-    <span class="${dl.done ? "done" : ""}">${dl.done ? "Solved today" : "Not solved yet"}</span></div>`;
+    <span class="${dl.done ? "done" : ""}">${dl.done ? "Solved" : "Not solved yet"}</span></div>`;
+
+  const seen = new Set();
+  const rec = lc.recent.filter((r) => !seen.has(r.slug) && seen.add(r.slug)).slice(0, 3);
+  $("recent").innerHTML = rec.length ? rec.map((r) => `<li><span class="main">${esc(r.title)}</span>
+    <span class="side num">${agoTs(r.ts)}</span></li>`).join("") : `<li class="empty">No accepted solves yet.</li>`;
 
   const now = Date.now() / 1000;
-  const cs = state.contests.slice(0, 4);
+  const cs = state.contests.slice(0, 3);
   $("contests").innerHTML = cs.length ? cs.map((c) => {
     const d = new Date(c.start * 1000);
     const live = c.start <= now;
@@ -316,40 +359,93 @@ function renderGrind() {
   }).join("") : `<li class="empty">No contests in the next week.</li>`;
 }
 
-function renderHunt() {
-  const apps = state.tracker;
-  const count = (st) => apps.filter((a) => a.stage === st || (st === "Rejected" && a.stage === "Ghosted")).length;
-  $("pipeline").innerHTML = STAGES.map((st) => {
-    const n = count(st);
-    return `<div class="${n ? "" : "zero"}"><b>${n}</b><span>${st === "Rejected" ? "Closed" : st}</span></div>`;
-  }).join("");
+const PERIOD_TAG = { day: "Today", week: "Week", month: "Month" };
 
-  const active = [...apps].sort((a, b) =>
-    (["Offer", "Interview", "OA", "Applied", "Rejected", "Ghosted"].indexOf(a.stage)) -
-    (["Offer", "Interview", "OA", "Applied", "Rejected", "Ghosted"].indexOf(b.stage)));
-  $("apps").innerHTML = apps.length ? active.slice(0, 5).map((a) => `
-    <li><span class="t stage-${esc(a.stage)}">${esc(a.stage)}</span>
-      <span class="main">${esc(a.company)} <span class="muted">· ${esc(a.role)}</span></span>
-      <span class="side num">${ago(a.updated)}</span></li>`).join("")
-    : `<li class="empty">No applications yet. On your laptop, open<br><code>http://&lt;phone-ip&gt;:${location.port || 80}/edit</code></li>`;
+function renderGoals() {
+  const g = state.progress;
+  $("lvl").textContent = g.level;
+  $("lvlTitle").textContent = g.title;
+  $("xpFill").style.transform = `scaleX(${g.into / g.need})`;
+  $("lvlXp").textContent = `${g.into} / ${g.need} XP to level ${g.level + 1} · ${inr.format(g.xp)} total`;
+  $("streak").textContent = g.streak;
+  $("streak").classList.toggle("muted", !g.streak);
 
-  $("goals").innerHTML = state.goals.map((g) => {
-    const v = g.value ?? 0, pct = Math.min(1, v / g.goal);
-    return `<li class="${v >= g.goal ? "met" : ""}">
-      <span class="g-label">${esc(g.label)}${g.auto ? "<small>auto</small>" : ""}</span>
-      <span class="g-val"><b>${g.value ?? "—"}</b> / ${g.goal}</span>
-      ${g.auto ? "" : `<button class="btn" data-goal="${g.key}" aria-label="Add one to ${esc(g.label)}">+1</button>`}
+  $("milestones").innerHTML = g.milestones.length ? g.milestones.map((m) => {
+    const pct = m.to ? Math.min(1, (m.value - m.from) / (m.to - m.from)) : 1;
+    const left = m.to ? m.to - m.value : 0;
+    return `<li><span class="ms-head"><span>${m.track}</span>
+        <span class="num"><b>${m.value}</b> → ${m.to ?? "max"}</span></span>
+      <span class="bar"><i style="transform:scaleX(${Math.max(0, pct)})"></i></span>
+      <span class="ms-sub">${m.to ? `${left} ${m.unit === "rating" ? "rating" : "problems"} to ${esc(m.name)}` : "Every milestone done"}</span></li>`;
+  }).join("") : `<li class="empty">Milestones appear once LeetCode and Codeforces load.</li>`;
+
+  const got = g.badges.filter((b) => b.got).length;
+  $("badgeCount").textContent = `${got}/${g.badges.length}`;
+  $("badges").innerHTML = g.badges.map((b) => `<span class="${b.got ? "got" : ""}">${esc(b.name)}</span>`).join("");
+
+  const order = { day: 0, week: 1, month: 2 };
+  const goals = [...g.goals].sort((a, b) => order[a.period] - order[b.period]);
+  const met = goals.filter((x) => x.met).length;
+  $("goalsMore").textContent = `${met}/${goals.length} done`;
+  $("goals").innerHTML = goals.length ? goals.map((x) => {
+    const v = x.value ?? 0, pct = Math.min(1, v / x.target);
+    const manual = x.metric === "manual";
+    return `<li class="${x.met ? "met" : ""}${manual ? "" : " auto"}">
+      <span class="g-label"><span class="g-tag">${PERIOD_TAG[x.period]}</span>${esc(x.label)}<small class="num">+${x.xp} XP${manual ? "" : " · auto"}</small></span>
+      <span class="g-val num"><b>${x.value ?? "—"}</b>/${x.target}</span>
+      ${manual ? `<span class="g-btns"><button class="btn ghost" data-goal="${esc(x.id)}" data-delta="-1" aria-label="Take one off ${esc(x.label)}">−</button><button class="btn" data-goal="${esc(x.id)}" data-delta="1" aria-label="Add one to ${esc(x.label)}">+1</button></span>` : ""}
       <span class="bar"><i style="transform:scaleX(${pct})"></i></span></li>`;
-  }).join("");
+  }).join("") : `<li class="empty">No goals yet. Add some from the editor on your laptop (/edit).</li>`;
 }
 
 $("goals").addEventListener("click", async (e) => {
   const b = e.target.closest("[data-goal]");
   if (!b) return;
   b.disabled = true;
-  try { await api("POST", "/api/counter", { key: b.dataset.goal, delta: 1 }); await load(); }
-  finally { b.disabled = false; }
+  try { await api("POST", "/api/counter", { id: b.dataset.goal, delta: +b.dataset.delta }); await load(); }
+  catch {} finally { b.disabled = false; }
 });
+
+/* ---------------- XP toasts ---------------- */
+
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+const toastQueue = [];
+let toastBusy = false;
+
+// Called after each load: any XP award newer than the last one we showed gets a toast.
+function celebrate() {
+  const g = state.progress;
+  const lastTs = store.get("xpSeenTs");
+  const lastLevel = store.get("xpSeenLevel");
+  const newest = g.recent[0]?.ts || 0;
+  if (lastTs === null) {  // first run on this device: don't replay history
+    store.set("xpSeenTs", newest); store.set("xpSeenLevel", g.level);
+    return;
+  }
+  const fresh = g.recent.filter((a) => a.ts > lastTs).reverse();
+  fresh.forEach((a) => toastQueue.push({ big: `+${a.xp} XP`, text: a.label }));
+  if (lastLevel !== null && g.level > lastLevel) toastQueue.push({ big: `Level ${g.level}`, text: g.title, level: true });
+  if (newest > lastTs) store.set("xpSeenTs", newest);
+  store.set("xpSeenLevel", g.level);
+  if (fresh.length) try { navigator.vibrate?.(60); } catch {}
+  nextToast();
+}
+
+function nextToast() {
+  if (toastBusy || !toastQueue.length) return;
+  toastBusy = true;
+  const t = toastQueue.shift(), el = $("toast");
+  el.innerHTML = `<b class="num">${esc(t.big)}</b><span>${esc(t.text)}</span>`;
+  el.classList.toggle("level", !!t.level);
+  el.classList.add("show");
+  setTimeout(() => {
+    el.classList.remove("show");
+    setTimeout(() => { toastBusy = false; nextToast(); }, 200);
+  }, t.level ? 5000 : 3200);
+}
 
 /* ---------------- keep the screen on ---------------- */
 

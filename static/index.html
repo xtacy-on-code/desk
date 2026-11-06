@@ -17,9 +17,11 @@
       <nav class="tabs" aria-label="Pages">
         <button class="tab" data-page="0" aria-current="page">Today</button>
         <button class="tab" data-page="1">Grind</button>
-        <button class="tab" data-page="2">Hunt</button>
+        <button class="tab" data-page="2">Goals</button>
+        <span class="tab-ind" id="tabInd" aria-hidden="true"></span>
       </nav>
       <div class="alert" id="alert" hidden></div>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
       <div class="status">
         <button class="fs-btn" id="fsBtn" hidden>Full screen</button>
         <span class="num" id="topClock" hidden></span>
@@ -42,7 +44,7 @@
         </div>
         <div class="col">
           <div class="block grow">
-            <h2>Schedule</h2>
+            <h2 id="schedLabel">Schedule</h2>
             <ul class="rows" id="schedule"></ul>
           </div>
           <div class="focus" id="focus">
@@ -70,32 +72,49 @@
           <div class="split" id="split" aria-hidden="true"></div>
           <div class="legend" id="legend"></div>
           <div class="stats" id="stats"></div>
-          <div class="heat" id="heat" aria-label="Submissions over the last 18 weeks"></div>
+          <div class="heat" id="heat" aria-label="LeetCode submissions per day"></div>
+          <div class="pace" id="pace"></div>
         </div>
         <div class="col">
           <div class="block">
-            <h2>Daily problem</h2>
+            <h2>Daily problem <span class="more num" id="dailyReset"></span></h2>
             <a class="daily" id="daily" target="_blank" rel="noopener"></a>
           </div>
+          <div class="block">
+            <h2>Recent solves</h2>
+            <ul class="rows" id="recent"></ul>
+          </div>
           <div class="block grow">
-            <h2>Upcoming contests</h2>
+            <h2>Contests</h2>
             <ul class="rows" id="contests"></ul>
           </div>
         </div>
       </section>
 
-      <!-- HUNT -->
-      <section class="page hunt" aria-label="Hunt">
+      <!-- GOALS -->
+      <section class="page goals-page" aria-label="Goals">
         <div class="col">
-          <div class="pipeline" id="pipeline"></div>
+          <div class="lvl">
+            <div class="lvl-num"><span class="lvl-tag">LV</span><span class="big num" id="lvl">1</span></div>
+            <div class="lvl-body">
+              <div class="lvl-title" id="lvlTitle">Rookie</div>
+              <div class="xp-bar"><i id="xpFill"></i></div>
+              <div class="lvl-xp num" id="lvlXp"></div>
+            </div>
+            <div class="streak"><b class="num" id="streak">0</b><span>day streak</span></div>
+          </div>
+          <div class="block">
+            <h2>Next milestones</h2>
+            <ul class="ms" id="milestones"></ul>
+          </div>
           <div class="block grow">
-            <h2>Applications</h2>
-            <ul class="rows" id="apps"></ul>
+            <h2>Badges <span class="more num" id="badgeCount"></span></h2>
+            <div class="badges" id="badges"></div>
           </div>
         </div>
         <div class="col">
           <div class="block grow">
-            <h2>This week</h2>
+            <h2>Goals <span class="more" id="goalsMore"></span></h2>
             <ul class="goals" id="goals"></ul>
           </div>
         </div>
