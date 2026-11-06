@@ -3,7 +3,7 @@
     python server.py            # serves on http://localhost:8080 (port from config.json)
 
 The phone opens http://localhost:8080. Your laptop opens http://<phone-ip>:8080/edit
-to manage the internship tracker (needs the PIN printed at startup).
+to manage exams and goals (needs the PIN printed at startup).
 """
 import datetime as dt
 import json
@@ -22,7 +22,9 @@ DATA = os.path.join(ROOT, "data")
 os.makedirs(DATA, exist_ok=True)
 
 LOCK = threading.Lock()
-CACHE = {"leetcode": None, "contests": [], "weather": None, "vitals": None, "deadlines": [], "errors": {}}
+XP_LOCK = threading.Lock()
+CACHE = {"leetcode": None, "codeforces": None, "contests": [], "weather": None, "vitals": None,
+         "deadlines": [], "errors": {}}
 
 
 # ---------- small helpers ----------
@@ -88,7 +90,7 @@ LC_QUERY = """query($u:String!){
    userCalendar{ streak totalActiveDays submissionCalendar } profile{ ranking } }
  allQuestionsCount{ difficulty count }
  userContestRanking(username:$u){ rating attendedContestsCount topPercentage }
- recentAcSubmissionList(username:$u, limit:15){ title titleSlug timestamp }
+ recentAcSubmissionList(username:$u, limit:20){ title titleSlug timestamp }
  activeDailyCodingChallengeQuestion{ date link question{ title titleSlug difficulty } }
  topTwoContests{ title titleSlug startTime duration }
 }"""
@@ -131,10 +133,20 @@ def fetch_leetcode(username):
         "contestRating": round(contest["rating"]) if contest else None,
         "calendar": by_day,
         "recent": [{"title": s["title"], "slug": s["titleSlug"], "ts": int(s["timestamp"])}
-                   for s in recent[:5]],
+                   for s in recent],
         "daily": {"title": daily["question"]["title"], "difficulty": daily["question"]["difficulty"],
+                  "slug": daily["question"]["titleSlug"],
                   "url": "https://leetcode.com" + daily["link"], "done": daily_done},
     }, lc_contests
+
+
+def fetch_codeforces_user(handle):
+    info = http_json(f"https://codeforces.com/api/user.info?handles={urllib.parse.quote(handle)}")["result"][0]
+    hist = http_json(f"https://codeforces.com/api/user.rating?handle={urllib.parse.quote(handle)}")["result"]
+    return {"handle": info["handle"], "rating": info.get("rating"), "maxRating": info.get("maxRating"),
+            "rank": info.get("rank", "unrated"),
+            "contests": [{"name": c["contestName"], "ts": c["ratingUpdateTimeSeconds"],
+                          "old": c["oldRating"], "new": c["newRating"]} for c in hist[-30:]]}
 
 
 def fetch_codeforces():
@@ -251,13 +263,14 @@ def fetch_vitals():
 
 
 def refresh_loop():
-    next_run = {"lc": 0, "cf": 0, "wx": 0, "vt": 0, "ic": 0}
+    next_run = {"lc": 0, "cf": 0, "cu": 0, "wx": 0, "vt": 0, "ic": 0}
     lc_contests = []
     while True:
         cfg = config()
         now = time.time()
-        every = {"lc": cfg.get("leetcode_refresh_min", 10) * 60, "cf": 3600, "wx": 20 * 60, "vt": 60, "ic": 30 * 60}
-        needs = {"wx": cfg.get("city"), "ic": cfg.get("ical_feeds")}
+        every = {"lc": cfg.get("leetcode_refresh_min", 10) * 60, "cf": 3600, "cu": 30 * 60,
+                 "wx": 20 * 60, "vt": 60, "ic": 30 * 60}
+        needs = {"wx": cfg.get("city"), "ic": cfg.get("ical_feeds"), "cu": cfg.get("codeforces_handle")}
         jobs = [j for j in next_run if now >= next_run[j] and needs.get(j, True)]
         if not cfg.get("ical_feeds"):
             CACHE["deadlines"] = []
@@ -267,10 +280,15 @@ def refresh_loop():
                     lc, lc_contests = fetch_leetcode(cfg["leetcode_username"])
                     with LOCK:
                         CACHE["leetcode"] = lc
+                    snapshot_solved(lc["solved"].get("All", 0))
                 elif job == "cf":
                     cf = fetch_codeforces()
                     with LOCK:
                         CACHE["cf"] = cf
+                elif job == "cu":
+                    cu = fetch_codeforces_user(cfg["codeforces_handle"])
+                    with LOCK:
+                        CACHE["codeforces"] = cu
                 elif job == "wx":
                     wx = fetch_weather(cfg["city"])
                     with LOCK:
@@ -298,42 +316,286 @@ def refresh_loop():
 
 # ---------- state assembled for the dashboard ----------
 
+def snapshot_solved(total):
+    """Keep one LeetCode solved-count per day so the Grind page can show a real pace."""
+    path = data_path("lc_history.json")
+    hist = load_json(path, {})
+    today = dt.date.today().isoformat()
+    if hist.get(today) == total:
+        return
+    hist[today] = total
+    cutoff = (dt.date.today() - dt.timedelta(days=60)).isoformat()
+    save_json(path, {d: n for d, n in hist.items() if d >= cutoff})
+
+
+LC_MILESTONES = [25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 600, 750, 1000, 1250, 1500, 2000, 2500, 3000]
+CF_MILESTONES = [(1200, "Pupil"), (1400, "Specialist"), (1600, "Expert"), (1900, "Candidate Master"),
+                 (2100, "Master"), (2300, "International Master"), (2400, "Grandmaster")]
+
+
+def lc_pace(total):
+    """Problems per week over the last 4 weeks of snapshots, and when the next milestone lands."""
+    hist = load_json(data_path("lc_history.json"), {})
+    today = dt.date.today()
+    window = sorted((d, n) for d, n in hist.items() if d >= (today - dt.timedelta(days=28)).isoformat())
+    nxt = next((m for m in LC_MILESTONES if m > total), None)
+    if not window:
+        return {"days": 0, "next": nxt}
+    first_day, first_n = window[0]
+    days = (today - dt.date.fromisoformat(first_day)).days
+    if days < 3:
+        return {"days": days, "next": nxt}
+    per_day = (total - first_n) / days
+    eta = None
+    if nxt and per_day > 0:
+        eta = (today + dt.timedelta(days=round((nxt - total) / per_day))).isoformat()
+    return {"days": days, "perWeek": round(per_day * 7, 1), "next": nxt, "eta": eta}
+
+
+def schedule_for(day, cfg, all_events):
+    classes = [{"start": c[0], "end": c[1], "title": c[2], "where": c[3] if len(c) > 3 else ""}
+               for c in cfg.get("timetable", {}).get(day.strftime("%a").lower(), [])]
+    events = [{"start": e.get("time", ""), "end": e.get("end", ""), "where": e.get("where", ""),
+               "title": e["title"], "kind": e.get("kind", "")}
+              for e in all_events if e.get("date") == day.isoformat() and e.get("title")]
+    return sorted(classes + events, key=lambda x: x["start"] or "99")
+
+
+def _hhmm(s):
+    h, m = (s or "0:0").split(":")[:2]
+    return int(h) * 60 + int(m)
+
+
+def pick_schedule(cfg, all_events):
+    """Today's schedule, or the next day that has something once today's last item has ended."""
+    now = dt.datetime.now()
+    today = now.date()
+    items = schedule_for(today, cfg, all_events)
+    timed = [x for x in items if x["start"]]
+    last_end = max((_hhmm(x["end"]) if x["end"] else _hhmm(x["start"]) + 60 for x in timed), default=None)
+    over = not items or (last_end is not None and now.hour * 60 + now.minute >= last_end)
+    if not over:
+        return {"label": "Today", "isToday": True, "items": items}
+    for ahead in range(1, 8):
+        day = today + dt.timedelta(days=ahead)
+        nxt = schedule_for(day, cfg, all_events)
+        if nxt:
+            label = "Tomorrow" if ahead == 1 else day.strftime("%A")
+            return {"label": label, "isToday": False, "items": nxt}
+    return {"label": "Today", "isToday": True, "items": items}
+
+
+# ---------- goals, XP and levels ----------
+
+DEFAULT_GOALS = [
+    {"id": "potd", "label": "LeetCode POTD", "period": "day", "metric": "lc_potd", "target": 1},
+    {"id": "lc2", "label": "LeetCode problems", "period": "day", "metric": "lc_solved", "target": 2},
+    {"id": "dms", "label": "Referral DMs / cold mails", "period": "week", "metric": "manual", "target": 10},
+    {"id": "apps", "label": "Applications sent", "period": "week", "metric": "manual", "target": 5},
+    {"id": "cfc", "label": "Codeforces contests", "period": "month", "metric": "cf_contests", "target": 3},
+]
+METRICS = ["manual", "lc_potd", "lc_solved", "cf_contests", "focus_min"]
+PERIODS = ["day", "week", "month"]
+GOAL_XP = {"day": 10, "week": 50, "month": 120}
+BONUS_XP = {"day": 20, "week": 60}  # every goal of that period met
+MILESTONE_XP = {"lc": 100, "cf": 200}
+TITLES = ["Rookie", "Apprentice", "Grinder", "Solver", "Problem Slayer", "Hacker", "Architect", "Wizard",
+          "Legend", "Mythic"]
+
+
+def goal_defs():
+    path = data_path("goals.json")
+    if not os.path.exists(path):
+        save_json(path, DEFAULT_GOALS)
+    return load_json(path, DEFAULT_GOALS)
+
+
+def period_key(period, day):
+    if period == "day":
+        return day.isoformat()
+    if period == "week":
+        return week_key(day)
+    return day.strftime("%Y-%m")
+
+
+def level_of(xp):
+    level, need = 1, 100
+    while xp >= need:
+        xp -= need
+        level += 1
+        need = 100 + 50 * (level - 1)
+    return {"level": level, "into": xp, "need": need, "title": TITLES[min((level - 1) // 2, len(TITLES) - 1)]}
+
+
+def goal_value(g, today, lc, cu, counters, focus):
+    """Current progress for one goal, or None when its data source hasn't loaded yet."""
+    m = g["metric"]
+    if m == "manual":
+        return counters.get(period_key(g["period"], today), {}).get(g["id"], 0)
+    if m in ("lc_potd", "lc_solved"):
+        if not lc:
+            return None
+        todays = {s["slug"] for s in lc.get("recent", [])
+                  if dt.datetime.fromtimestamp(s["ts"]).date() == today}
+        if m == "lc_potd":
+            return 1 if lc["daily"].get("slug") in todays else 0
+        if g["period"] == "day":
+            return len(todays)
+        # Weekly/monthly problem counts come from the activity calendar (submissions, not unique).
+        start = week_start(today) if g["period"] == "week" else today.replace(day=1)
+        return sum(n for d, n in lc.get("calendar", {}).items() if start.isoformat() <= d <= today.isoformat())
+    if m == "cf_contests":
+        if not cu:
+            return None
+        start = {"day": today, "week": week_start(today), "month": today.replace(day=1)}[g["period"]]
+        return sum(1 for c in cu["contests"] if dt.datetime.fromtimestamp(c["ts"]).date() >= start)
+    if m == "focus_min":
+        if g["period"] == "day":
+            return focus.get(today.isoformat(), 0)
+        start = week_start(today) if g["period"] == "week" else today.replace(day=1)
+        return sum(n for d, n in focus.items() if start.isoformat() <= d <= today.isoformat())
+    return None
+
+
+def sync_goals(today, lc, cu, counters, focus):
+    """Work out goal progress and keep data/xp.json in step with it.
+
+    XP for the current day/week/month follows the goal: hit it and the XP lands, undo a +1 and it
+    goes again. Past periods are frozen. Milestones already passed on the first run count as a
+    baseline (no XP), so turning this on doesn't dump hundreds of XP at once.
+    """
+    defs = goal_defs()
+    rows = []
+    for g in defs:
+        v = goal_value(g, today, lc, cu, counters, focus)
+        rows.append({**g, "value": v, "xp": GOAL_XP.get(g["period"], 10),
+                     "key": f"g:{g['id']}:{period_key(g['period'], today)}"})
+
+    wanted = {}   # award key -> (xp, label), for everything decided right now
+    undecided = set()
+    for r in rows:
+        if r["value"] is None:
+            undecided.add(r["key"])
+        elif r["value"] >= r["target"]:
+            wanted[r["key"]] = (r["xp"], r["label"])
+    for period, bonus in BONUS_XP.items():
+        group = [r for r in rows if r["period"] == period]
+        key = f"perfect:{period}:{period_key(period, today)}"
+        if not group or any(r["value"] is None for r in group):
+            undecided.add(key)
+        elif all(r["value"] >= r["target"] for r in group):
+            wanted[key] = (bonus, "Perfect day" if period == "day" else "Perfect week")
+
+    with XP_LOCK:
+        path = data_path("xp.json")
+        store = load_json(path, {})
+        awards = store.setdefault("awards", {})
+        floors = store.setdefault("baseline", {})
+        changed = False
+        current = {r["key"] for r in rows} | {f"perfect:{p}:{period_key(p, today)}" for p in BONUS_XP}
+        for key in current - undecided:
+            if key in wanted and key not in awards:
+                xp, label = wanted[key]
+                awards[key] = {"xp": xp, "label": label, "ts": time.time()}
+                changed = True
+            elif key not in wanted and key in awards:
+                del awards[key]
+                changed = True
+
+        def milestone(track, value, steps, xp):
+            nonlocal changed
+            if value is None:
+                return
+            if track not in floors:
+                floors[track] = value
+                changed = True
+            for step, name in steps:
+                key = f"ms:{track}:{step}"
+                if value >= step and key not in awards:
+                    gained = 0 if step <= floors[track] else xp
+                    awards[key] = {"xp": gained, "label": name, "ts": time.time()}
+                    changed = True
+
+        lc_total = lc["solved"].get("All") if lc else None
+        milestone("lc", lc_total, [(m, f"{m} LeetCode solved") for m in LC_MILESTONES], MILESTONE_XP["lc"])
+        milestone("cf", cu.get("maxRating") if cu else None,
+                  [(r, f"Codeforces {name}") for r, name in CF_MILESTONES], MILESTONE_XP["cf"])
+
+        perfect_days = {k.split(":", 2)[2] for k in awards if k.startswith("perfect:day:")}
+        day = today if today.isoformat() in perfect_days else today - dt.timedelta(days=1)
+        streak = 0
+        while day.isoformat() in perfect_days:
+            streak += 1
+            day -= dt.timedelta(days=1)
+        if streak > store.get("bestStreak", 0):
+            store["bestStreak"] = streak
+            changed = True
+        if changed:
+            save_json(path, store)
+        total = sum(a["xp"] for a in awards.values())
+        recent = sorted(({"key": k, **a} for k, a in awards.items() if a["xp"] > 0),
+                        key=lambda a: a["ts"], reverse=True)[:5]
+        best = store.get("bestStreak", 0)
+        has_perfect_week = any(k.startswith("perfect:week:") for k in awards)
+        first = any(a["xp"] > 0 for a in awards.values())
+
+    lvl = level_of(total)
+    cf_max = (cu or {}).get("maxRating") or 0
+    badges = [
+        ("First tick", first), ("3-day streak", best >= 3), ("7-day streak", best >= 7),
+        ("30-day streak", best >= 30), ("Perfect week", has_perfect_week), ("Level 5", lvl["level"] >= 5),
+        ("Level 10", lvl["level"] >= 10), ("Specialist", cf_max >= 1400), ("Expert", cf_max >= 1600),
+    ]
+
+    def next_step(value, steps):
+        prev = 0
+        for step, name in steps:
+            if value < step:
+                return {"value": value, "from": prev, "to": step, "name": name}
+            prev = step
+        return {"value": value, "from": prev, "to": None, "name": "All done"}
+
+    milestones = []
+    if lc_total is not None:
+        milestones.append({"track": "LeetCode", "unit": "solved",
+                           **next_step(lc_total, [(m, f"{m} solved") for m in LC_MILESTONES])})
+    if cu and cu.get("rating") is not None:
+        milestones.append({"track": "Codeforces", "unit": "rating",
+                           **next_step(cu["rating"], CF_MILESTONES)})
+    return {
+        "goals": [{k: r[k] for k in ("id", "label", "period", "metric", "target", "value", "xp")}
+                  | {"met": r["value"] is not None and r["value"] >= r["target"]} for r in rows],
+        "xp": total, **lvl, "streak": streak, "bestStreak": best,
+        "recent": recent, "badges": [{"name": n, "got": g} for n, g in badges],
+        "milestones": milestones, "defs": defs, "metrics": METRICS, "periods": PERIODS,
+    }
+
+
+# ---------- state assembled for the dashboard ----------
+
 def build_state():
     cfg = config()
     today = dt.date.today()
-    tracker = load_json(data_path("tracker.json"), [])
     counters = load_json(data_path("counters.json"), {})
     focus = load_json(data_path("focus.json"), {})
     with LOCK:
         lc = CACHE["leetcode"]
-        state = {k: CACHE[k] for k in ("leetcode", "contests", "weather", "vitals")}
+        cu = CACHE["codeforces"]
+        state = {k: CACHE[k] for k in ("leetcode", "codeforces", "contests", "weather", "vitals")}
         state["errors"] = dict(CACHE["errors"])
 
     ws = week_start(today)
     week_days = [(ws + dt.timedelta(days=i)).isoformat() for i in range(7)]
-    dsa_week = sum((lc or {}).get("calendar", {}).get(d, 0) for d in week_days) if lc else None
-    apps_week = sum(1 for a in tracker if a.get("applied", "") >= ws.isoformat())
-    wk = counters.get(week_key(today), {})
-    goals_cfg = cfg.get("weekly_goals", {})
-    state["goals"] = [
-        {"key": "dsa", "label": "LeetCode submissions", "value": dsa_week, "goal": goals_cfg.get("dsa", 14), "auto": True},
-        {"key": "dms", "label": "Referral asks / cold DMs", "value": wk.get("dms", 0), "goal": goals_cfg.get("dms", 10), "auto": False},
-        {"key": "apps", "label": "Applications sent", "value": apps_week, "goal": goals_cfg.get("apps", 5), "auto": True},
-        {"key": "mocks", "label": "Mock interviews", "value": wk.get("mocks", 0), "goal": goals_cfg.get("mocks", 1), "auto": False},
-    ]
+    state["progress"] = sync_goals(today, lc, cu, counters, focus)
+    if lc:
+        state["pace"] = lc_pace(lc["solved"].get("All", 0))
+        state["lcWeek"] = sum(lc.get("calendar", {}).get(d, 0) for d in week_days)
     state["focus"] = {"today": focus.get(today.isoformat(), 0),
                       "week": sum(focus.get(d, 0) for d in week_days),
                       "presets": cfg.get("focus_presets", [25, 50])}
-    state["tracker"] = tracker
-    day_name = today.strftime("%a").lower()
-    classes = [{"start": c[0], "end": c[1], "title": c[2], "where": c[3] if len(c) > 3 else ""}
-               for c in cfg.get("timetable", {}).get(day_name, [])]
     # Exams/tests/etc. come from data/events.json (editor + API) and config.json "events".
     all_events = load_json(data_path("events.json"), []) + cfg.get("events", [])
-    todays = [{"start": e.get("time", ""), "end": e.get("end", ""), "where": e.get("where", ""),
-               "title": e["title"], "kind": e.get("kind", "")}
-              for e in all_events if e.get("date") == today.isoformat()]
-    state["schedule"] = sorted(classes + todays, key=lambda x: x["start"] or "99")
+    state["schedule"] = pick_schedule(cfg, all_events)
 
     # "Coming up": exams/tests, assignment deadlines from calendar feeds, and plain countdowns.
     def local_ts(date, hhmm=""):
@@ -364,7 +626,6 @@ def build_state():
 
 # ---------- HTTP ----------
 
-STAGES = ["Applied", "OA", "Interview", "Offer", "Rejected", "Ghosted"]
 EVENT_KINDS = ["Exam", "Test", "Quiz", "Lab exam", "Viva", "Due", "OA", "Event"]
 
 
@@ -431,14 +692,17 @@ class Handler(SimpleHTTPRequestHandler):
             if path == "/api/pin-check":
                 return self.send_json({"ok": True})
             if path == "/api/counter" and method == "POST":
-                key = body.get("key")
-                if key not in ("dms", "mocks"):
-                    return self.send_json({"error": "Unknown counter"}, 400)
+                goal = next((g for g in goal_defs() if g["id"] == body.get("id")), None)
+                if not goal or goal["metric"] != "manual":
+                    return self.send_json({"error": "Unknown manual goal"}, 400)
                 counters = load_json(data_path("counters.json"), {})
-                wk = counters.setdefault(week_key(today), {})
-                wk[key] = max(0, wk.get(key, 0) + int(body.get("delta", 1)))
+                bucket = counters.setdefault(period_key(goal["period"], today), {})
+                delta = max(-1, min(1, int(body.get("delta", 1))))
+                bucket[goal["id"]] = max(0, bucket.get(goal["id"], 0) + delta)
                 save_json(data_path("counters.json"), counters)
-                return self.send_json({"value": wk[key]})
+                return self.send_json({"value": bucket[goal["id"]]})
+            if path == "/api/goals" and method == "PUT":
+                return self.save_goals(body)
             if path == "/api/focus" and method == "POST":
                 minutes = int(body.get("minutes", 0))
                 if not 0 < minutes <= 240:
@@ -447,8 +711,6 @@ class Handler(SimpleHTTPRequestHandler):
                 focus[today.isoformat()] = focus.get(today.isoformat(), 0) + minutes
                 save_json(data_path("focus.json"), focus)
                 return self.send_json({"today": focus[today.isoformat()]})
-            if path.startswith("/api/tracker"):
-                return self.tracker(method, path, body, today)
             if path.startswith("/api/events"):
                 return self.events(method, path, body)
         return self.send_json({"error": "Not found"}, 404)
@@ -482,39 +744,31 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json({"ok": True})
         return self.send_json({"error": "No such event"}, 404)
 
-    def tracker(self, method, path, body, today):
-        items = load_json(data_path("tracker.json"), [])
-        item_id = path[len("/api/tracker/"):] if path.startswith("/api/tracker/") else None
-        if method == "POST" and not item_id:
-            company = (body.get("company") or "").strip()
-            if not company:
-                return self.send_json({"error": "Company is required"}, 400)
-            stage = body.get("stage") if body.get("stage") in STAGES else "Applied"
-            item = {"id": secrets.token_hex(4), "company": company[:60],
-                    "role": (body.get("role") or "SWE Intern").strip()[:60],
-                    "stage": stage, "applied": body.get("applied") or today.isoformat(),
-                    "updated": today.isoformat(), "via": (body.get("via") or "").strip()[:40],
-                    "notes": (body.get("notes") or "").strip()[:200]}
-            items.insert(0, item)
-            save_json(data_path("tracker.json"), items)
-            return self.send_json(item, 201)
-        match = next((i for i in items if i["id"] == item_id), None)
-        if not match:
-            return self.send_json({"error": "No such application"}, 404)
-        if method == "DELETE":
-            items.remove(match)
-            save_json(data_path("tracker.json"), items)
-            return self.send_json({"ok": True})
-        if method == "PUT":
-            for k in ("company", "role", "via", "notes", "applied"):
-                if k in body:
-                    match[k] = str(body[k]).strip()[:200]
-            if body.get("stage") in STAGES and body["stage"] != match["stage"]:
-                match["stage"] = body["stage"]
-                match["updated"] = today.isoformat()
-            save_json(data_path("tracker.json"), items)
-            return self.send_json(match)
-        return self.send_json({"error": "Method not allowed"}, 405)
+    def save_goals(self, body):
+        """Replace the goal list. Keeps ids stable so progress and XP stay attached."""
+        incoming = body.get("goals")
+        if not isinstance(incoming, list) or len(incoming) > 20:
+            return self.send_json({"error": "Send {\"goals\": [...]} with at most 20 goals"}, 400)
+        out, seen = [], set()
+        for g in incoming:
+            label = str(g.get("label") or "").strip()[:60]
+            if not label:
+                return self.send_json({"error": "Every goal needs a name"}, 400)
+            if g.get("period") not in PERIODS or g.get("metric") not in METRICS:
+                return self.send_json({"error": f"Bad period or tracking for '{label}'"}, 400)
+            try:
+                target = int(g.get("target"))
+            except (TypeError, ValueError):
+                target = 0
+            if not 1 <= target <= 10000:
+                return self.send_json({"error": f"Target for '{label}' must be 1-10000"}, 400)
+            gid = str(g.get("id") or "").strip()[:24] or secrets.token_hex(3)
+            if gid in seen:
+                gid = secrets.token_hex(3)
+            seen.add(gid)
+            out.append({"id": gid, "label": label, "period": g["period"], "metric": g["metric"], "target": target})
+        save_json(data_path("goals.json"), out)
+        return self.send_json({"goals": out})
 
 
 def main():
@@ -523,7 +777,7 @@ def main():
     threading.Thread(target=refresh_loop, daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     print(f"Dashboard:       http://localhost:{port}")
-    print(f"Tracker editor:  http://<this-phone's-ip>:{port}/edit   (PIN {get_pin()})")
+    print(f"Editor:          http://<this-phone's-ip>:{port}/edit   (PIN {get_pin()})")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
