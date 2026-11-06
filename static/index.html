@@ -3,30 +3,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0a0e17">
+  <meta name="theme-color" content="#1d0f33">
   <meta name="mobile-web-app-capable" content="yes">
   <title>Desk</title>
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/icon-192.png">
-  <link rel="preload" href="/fonts/ChakraPetch-Bold.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/Bungee-Regular.ttf" as="font" type="font/ttf" crossorigin>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <div class="app" id="app">
     <header class="top">
       <nav class="tabs" aria-label="Pages">
+        <span class="tab-ind" id="tabInd" aria-hidden="true"></span>
         <button class="tab" data-page="0" aria-current="page">Today</button>
         <button class="tab" data-page="1">Grind</button>
-        <button class="tab" data-page="2">Goals</button>
-        <span class="tab-ind" id="tabInd" aria-hidden="true"></span>
+        <button class="tab" data-page="2">Quests</button>
       </nav>
       <div class="alert" id="alert" hidden></div>
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
       <div class="status">
         <button class="fs-btn" id="fsBtn" hidden>Full screen</button>
         <span id="battery" hidden></span>
-        <span class="num" id="topClock" hidden></span>
+        <span class="disp" id="topClock" hidden></span>
         <span class="sync" id="sync"><i></i><span>Loading</span></span>
       </div>
     </header>
@@ -35,29 +35,28 @@
       <!-- TODAY -->
       <section class="page today is-active" aria-label="Today">
         <div class="col">
-          <div class="clock num" id="clock">--:--<small>--</small></div>
+          <div class="clock disp" id="clock">--:--<small>--</small></div>
           <div class="date" id="date"></div>
           <div class="weather" id="weather"></div>
-          <div class="block grow">
+          <div class="gl grow">
             <h2>Incoming <span class="more" id="upcomingMore"></span></h2>
             <ul class="rows" id="upcoming"></ul>
           </div>
         </div>
         <div class="col">
-          <div class="block grow">
+          <div class="gl grow">
             <h2 id="schedLabel">Schedule</h2>
             <ul class="rows sched" id="schedule"></ul>
           </div>
-          <div class="focus" id="focus">
+          <div class="gl focus" id="focus">
             <div class="focus-dial">
               <svg class="ring" viewBox="0 0 64 64" aria-hidden="true">
                 <circle cx="32" cy="32" r="28" class="ring-bg"/>
                 <circle cx="32" cy="32" r="28" class="ring-fg" id="ringFg"/>
               </svg>
-              <div class="focus-time num" id="focusTime">25:00</div>
+              <div class="focus-time disp" id="focusTime">25:00</div>
             </div>
             <div class="focus-body">
-              <div class="label">Focus mode</div>
               <div class="focus-actions" id="focusActions"></div>
               <div class="focus-total" id="focusTotal"></div>
             </div>
@@ -68,51 +67,51 @@
       <!-- GRIND -->
       <section class="page grind" aria-label="Grind">
         <div class="col">
-          <div class="label" id="streakState">Streak</div>
-          <div class="streak-hero">
-            <span class="hero num" id="lcStreak">--</span>
-            <div class="streak-side">
-              <div class="unit">Days</div>
-              <div class="timer num" id="streakTimer"></div>
+          <div class="gl">
+            <h2 id="streakState">Streak</h2>
+            <div class="streak-hero">
+              <span class="hero disp" id="lcStreak">--</span>
+              <div>
+                <div class="unit disp">days</div>
+                <div class="timer" id="streakTimer"></div>
+              </div>
             </div>
+            <div class="potd" id="potd"></div>
           </div>
-          <div class="potd" id="potd"></div>
-          <div class="solved" id="solved"></div>
-          <a class="quest frame" id="daily" target="_blank" rel="noopener">
-            <span class="sk" style="width:70%"></span><span class="sk" style="width:40%"></span>
-          </a>
+          <div class="gl grow solved" id="solved"></div>
         </div>
         <div class="col">
-          <div class="target" id="lcTarget"></div>
-          <div class="target" id="cfTarget"></div>
-          <div class="duel" id="duel"></div>
-          <div class="raid" id="raid"></div>
+          <div class="gl quest" id="daily">
+            <span class="sk" style="width:70%"></span><span class="sk" style="width:40%"></span>
+          </div>
+          <div class="gl" id="lcTarget"></div>
+          <div class="gl grow raid" id="raid"></div>
         </div>
       </section>
 
-      <!-- GOALS -->
-      <section class="page goals-page" aria-label="Goals">
+      <!-- QUESTS -->
+      <section class="page goals-page" aria-label="Quests">
         <div class="col">
-          <div class="lvl">
-            <div class="lvl-chip"><span>LV</span><b class="num" id="lvl">1</b></div>
+          <div class="gl lvl">
+            <div class="lvl-chip"><span class="disp">LV</span><b class="disp" id="lvl">1</b></div>
             <div class="lvl-body">
               <div class="lvl-title" id="lvlTitle">Rookie</div>
-              <div class="segs xp" id="xpSegs" aria-hidden="true"></div>
-              <div class="sub num" id="lvlXp"></div>
+              <div class="bar xp"><i id="xpFill"></i></div>
+              <div class="sub" id="lvlXp"></div>
             </div>
           </div>
-          <div class="perfect">
-            <div><b class="num" id="streak">0</b><span>Perfect-day streak</span></div>
-            <div><b class="num" id="bestPerfect">0</b><span>Best</span></div>
-            <div><b class="num" id="xpTotal">0</b><span>Total XP</span></div>
+          <div class="gl perfect">
+            <div><b class="disp" id="streak">0</b><span>Perfect days</span></div>
+            <div><b class="disp" id="bestPerfect">0</b><span>Best</span></div>
+            <div><b class="disp" id="xpTotal">0</b><span>Total XP</span></div>
           </div>
-          <div class="block grow">
-            <h2>Badges <span class="more num" id="badgeCount"></span></h2>
+          <div class="gl grow">
+            <h2>Badges <span class="more" id="badgeCount"></span></h2>
             <div class="badges" id="badges"></div>
           </div>
         </div>
         <div class="col">
-          <div class="block grow">
+          <div class="gl grow">
             <h2>Quests <span class="more" id="goalsMore"></span></h2>
             <ul class="quests" id="goals"></ul>
           </div>
@@ -122,7 +121,7 @@
   </div>
 
   <div class="night" id="night" hidden>
-    <div class="night-clock num" id="nightClock"></div>
+    <div class="night-clock disp" id="nightClock"></div>
   </div>
 
   <script src="/app.js"></script>
