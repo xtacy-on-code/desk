@@ -389,6 +389,17 @@ def update_potd_log(lc):
 def potd_chain():
     log = load_json(data_path("potd.json"), {})
     done = set(log.get("done", []))
+    since = log.get("since", "")
+    # LeetCode only shows a POTD streak to the logged-in user, so the real number is told once
+    # in config ("potd_streak_seed": {"days": 69, "through": "YYYY-MM-DD"}) and the log extends it.
+    seed = config().get("potd_streak_seed") or {}
+    try:
+        through = dt.date.fromisoformat(seed["through"])
+        for i in range(int(seed["days"])):
+            done.add((through - dt.timedelta(days=i)).isoformat())
+        since = min(since or "9999", (through - dt.timedelta(days=int(seed["days"]))).isoformat())
+    except (KeyError, ValueError, TypeError):
+        pass
     if not done:
         return None
     today = dt.datetime.now(dt.timezone.utc).date()
@@ -400,8 +411,8 @@ def potd_chain():
     first = day + dt.timedelta(days=1)
     recent = [(today - dt.timedelta(days=i)).isoformat() for i in range(13, -1, -1)]
     return {"streak": streak, "doneToday": today.isoformat() in done,
-            "atLeast": streak > 0 and first.isoformat() <= log.get("since", ""),
-            "last14": [True if d in done else None if d < log.get("since", "") else False for d in recent]}
+            "atLeast": streak > 0 and first.isoformat() <= since,
+            "last14": [True if d in done else None if d < since else False for d in recent]}
 
 
 def grind_info(lc, cu):
@@ -431,6 +442,9 @@ def grind_info(lc, cu):
             "solved": {k: lc["solved"].get(k, 0) for k in ("All", "Easy", "Medium", "Hard")},
             "totalQuestions": lc["totals"].get("All", 0),
             "potd": potd_chain(),
+            # Submissions per day for the last 7 LeetCode (UTC) days, oldest first.
+            "last7": [{"date": (today_utc - dt.timedelta(days=i)).isoformat(),
+                       "n": cal.get((today_utc - dt.timedelta(days=i)).isoformat(), 0)} for i in range(6, -1, -1)],
         })
     if cu and cu.get("rating") is not None:
         r = cu["rating"]
