@@ -3,8 +3,8 @@
 The Galaxy A13 runs a small Python server in Termux and shows the dashboard full-screen in landscape.
 
 - **Today:** clock, date, weather, countdowns, a focus timer that logs your minutes, and your class schedule. Once today's last class ends, the schedule switches to the next day that has classes.
-- **Grind:** LeetCode solved by difficulty, streak, submissions this week, LeetCode and Codeforces ratings, an activity heatmap, your solving pace (and when you'll hit the next milestone), the daily problem with a reset countdown, your last few solves, and upcoming contests.
-- **Goals:** daily, weekly and monthly goals that earn XP. XP fills levels, perfect days build a streak, and badges unlock along the way. Next milestones for LeetCode solved and Codeforces rating sit on the left. A toast in the top bar shows each XP gain.
+- **Grind:** your LeetCode streak with a live countdown to when it breaks (05:30 IST), how far you are from your best streak, the daily problem as a quest, tiny next targets (the next 10 LeetCode solves, the next 25 Codeforces rating), today's submissions against yesterday's, and a countdown to the next contest.
+- **Goals:** daily, weekly and monthly goals that earn XP. XP fills levels, perfect days build a streak, and badges unlock along the way. Quests sit on the right, with your level, perfect-day streak and badges on the left. A toast in the top bar shows each XP gain.
 
 **Extras:**
 - **Auto-rotate:** pages change every 30 s, and swiping changes them by hand.
@@ -78,7 +78,7 @@ Each goal resets daily, weekly or monthly and is tracked one of these ways:
 | Codeforces contests | Rated Codeforces contests in the period |
 | Focus minutes | Minutes logged with the focus timer |
 
-**XP:** a daily goal is worth 10 XP, weekly 50, monthly 120. Hitting every daily goal adds a 20 XP *perfect day* bonus (this is what the streak counts), and every weekly goal adds 60. Each new LeetCode milestone (500 solved, 600, ...) is worth 100 XP, and each Codeforces rank (Specialist, Expert, ...) 200. Milestones you'd already passed before goals were turned on count with no XP. Undoing a +1 also takes back the XP for the current day, week or month.
+**XP:** a daily goal is worth 10 XP, weekly 50, monthly 120. Hitting every daily goal adds a 20 XP *perfect day* bonus (this is what the streak counts), and every weekly goal adds 60. Every 10 LeetCode problems solved is worth 20 XP, and every 25 Codeforces rating (your best rating) 40 XP. Steps you'd already passed before goals were turned on count with no XP. Undoing a +1 also takes back the XP for the current day, week or month.
 
 ## 7. Exams, tests and assignment deadlines
 
@@ -140,11 +140,11 @@ Edit the file in Termux with `nano ~/phone-dashboard/config.json`, or edit the l
 
 ## Where your data lives
 
-The `data/` folder holds `events.json` (exams and tests), `goals.json` (your goals), `counters.json` (+1 counts), `xp.json` (XP, streak and milestones), `lc_history.json` (solved count per day, for the pace), `focus.json` (focus minutes per day) and `pin.txt`. To back it up, copy the folder somewhere. Delete `pin.txt` to get a new PIN.
+The `data/` folder holds `events.json` (exams and tests), `goals.json` (your goals), `counters.json` (+1 counts), `xp.json` (XP, streak and milestones), `focus.json` (focus minutes per day) and `pin.txt`. To back it up, copy the folder somewhere. Delete `pin.txt` to get a new PIN.
 
 ## Notes
 
-- **Pace** on the Grind page needs 3 days of history, so it shows up a few days after you update.
+- The look is a game-style HUD in the **Chakra Petch** font, bundled in `static/fonts/` (SIL Open Font License, see `OFL.txt`), so it works offline.
 - **"Solved today"** on the daily problem is based on LeetCode's reset time (05:30 IST).
 - LeetCode's data comes from the same unofficial GraphQL endpoint the LeetCode website uses. If LeetCode changes it, the Grind page shows a "LeetCode failed" status in the top bar until it's fixed.
 - To run it on the laptop for testing: run `python server.py`, then open http://localhost:8080.
