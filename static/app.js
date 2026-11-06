@@ -303,11 +303,22 @@ function renderGrind() {
     $("streakTimer").textContent = "LeetCode loading";
   } else {
     $("lcStreak").textContent = g.streak;
-    const best = g.bestStreak || g.streak, toBeat = best - g.streak;
-    $("bestSegs").innerHTML = segs(best ? (g.streak / best) * 12 : 0, 12);
-    $("bestLine").innerHTML = toBeat > 0
-      ? `Best <b class="acc">${best}</b> · ${toBeat} more ${toBeat === 1 ? "day" : "days"} to beat it`
-      : `<b class="acc">New record</b> · every day now is a personal best`;
+
+    const p = g.potd;
+    $("potd").innerHTML = p ? `
+      <div class="t-head"><span class="label">POTD chain</span>
+        <span class="p-val num">${p.streak}${p.atLeast ? "+" : ""}<span> ${p.streak === 1 ? "day" : "days"}</span></span></div>
+      <div class="pips" aria-label="POTD solved in the last 14 days">${p.last14.map((d, i) =>
+        `<i class="${d ? "on" : d === null ? "unk" : ""}${i === 13 && !d ? " today" : ""}"></i>`).join("")}</div>
+      <div class="sub">${p.doneToday ? `<b class="acc">Today's done</b> · chain grows tomorrow` : `Solve today's POTD to make it ${p.streak + 1}`}</div>`
+      : `<div class="label">POTD chain</div><div class="sub">Starts counting once your solves load.</div>`;
+
+    const s = g.solved, parts = [["Easy", "easy"], ["Medium", "medium"], ["Hard", "hard"]];
+    $("solved").innerHTML = `
+      <div class="t-head"><span class="label">Solved</span>
+        <span class="p-val num">${s.All}<span> / ${inr.format(g.totalQuestions)}</span></span></div>
+      <div class="split">${parts.map(([k, c]) => `<i class="${c}" style="flex:${s[k] || 0.01}"></i>`).join("")}</div>
+      <div class="legend">${parts.map(([k, c]) => `<span class="${c}">${k} <b class="num">${s[k]}</b></span>`).join("")}</div>`;
   }
 
   if (lc) {

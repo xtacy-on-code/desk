@@ -191,8 +191,22 @@ h2 .more { margin-left: 8px; letter-spacing: 0.08em; color: var(--faint); }
 .unit { font-size: 15px; letter-spacing: 0.16em; text-transform: uppercase; }
 .timer { font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-top: 2px; }
 .timer.danger, #streakState.danger { color: var(--danger); }
-#bestSegs { margin: 10px 0 6px; }
-.quest { margin-top: auto; transition: transform 140ms var(--ease-out); transform-origin: left center; }
+.hero { font-size: 72px; }
+.potd { margin-top: 6px; }
+.p-val { font-size: 16px; font-weight: 700; color: var(--hi); }
+.p-val span { color: var(--faint); font-size: 12px; font-weight: 500; }
+.pips { display: flex; gap: 5px; margin: 6px 0 4px; }
+.pips i { flex: 1; height: 10px; background: var(--seg-off); transform: skewX(-20deg); }
+.pips i.on { background: var(--accent); }
+.pips i.unk { background: none; box-shadow: inset 0 0 0 1px var(--line); }
+.pips i.today { box-shadow: inset 0 0 0 1px var(--danger); }
+.solved { margin-top: 8px; }
+.split { display: flex; gap: 3px; height: 10px; margin: 6px 0 4px; }
+.split i { transform: skewX(-20deg); }
+.split i.easy { background: var(--easy); } .split i.medium { background: var(--med); } .split i.hard { background: var(--hard); }
+.legend { display: flex; gap: 16px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+.legend b { color: var(--hi); margin-left: 2px; }
+.quest { margin-top: auto; padding-top: 8px; padding-bottom: 8px; transition: transform 140ms var(--ease-out); transform-origin: left center; }
 .quest:active { transform: scale(0.98); }
 .quest .q-title { font-size: 18px; font-weight: 700; color: var(--hi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 .quest .q-meta { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
