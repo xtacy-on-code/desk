@@ -2,9 +2,9 @@
 
 The Galaxy A13 runs a small Python server in Termux and shows the dashboard full-screen in landscape.
 
-- **Today:** clock, date, weather, countdowns, today's classes, and a focus timer that logs your minutes.
-- **Grind:** LeetCode solved by difficulty, your streak, active days and rank, an 18-week activity heatmap, today's daily problem (with whether you've solved it), and upcoming LeetCode and Codeforces contests.
-- **Hunt:** your internship pipeline (Applied, OA, Interview, Offer, Closed), recent applications, and this week's goals. Goals come from the playbooks: submissions, cold DMs, applications and mock interviews.
+- **Today:** clock, date, weather, countdowns, a focus timer that logs your minutes, and your class schedule. Once today's last class ends, the schedule switches to the next day that has classes.
+- **Grind:** LeetCode solved by difficulty, streak, submissions this week, LeetCode and Codeforces ratings, an activity heatmap, your solving pace (and when you'll hit the next milestone), the daily problem with a reset countdown, your last few solves, and upcoming contests.
+- **Goals:** daily, weekly and monthly goals that earn XP. XP fills levels, perfect days build a streak, and badges unlock along the way. Next milestones for LeetCode solved and Codeforces rating sit on the left. A toast in the top bar shows each XP gain.
 
 **Extras:**
 - **Auto-rotate:** pages change every 30 s, and swiping changes them by hand.
@@ -62,13 +62,23 @@ It prints the dashboard address and a **6-digit PIN**. You'll need the PIN on yo
 - **Settings → Apps → Termux → Battery:** set to **Unrestricted** so Android doesn't kill the server.
 - **Settings → Battery → More battery settings → Protect battery:** on. This caps charging at 85%, which is better for a phone that stays plugged in all the time.
 
-## 6. Manage the tracker from your laptop
+## 6. Edit goals from your laptop
 
 1. Find the phone's IP address under **Settings → Connections → Wi-Fi**: tap the gear next to your network and look for the IP address (for example `192.168.1.23`).
 2. On your laptop, on the same Wi-Fi, open `http://192.168.1.23:8080/edit` and enter the PIN.
-3. Add applications and change their stage. The phone picks up changes within a minute.
+3. Under **Goals**, add, change or remove goals, then press **Save goals**. The phone picks up changes within a minute.
 
-The +1 buttons for cold DMs and mock interviews are on the phone's Hunt page.
+Each goal resets daily, weekly or monthly and is tracked one of these ways:
+
+| Tracked by | Counts |
+|---|---|
+| Me (+1 on phone) | Taps on the phone's Goals page (− undoes one) |
+| LeetCode POTD | 1 once you've solved today's daily problem |
+| LeetCode problems | Different problems accepted today (weekly/monthly goals count submissions instead) |
+| Codeforces contests | Rated Codeforces contests in the period |
+| Focus minutes | Minutes logged with the focus timer |
+
+**XP:** a daily goal is worth 10 XP, weekly 50, monthly 120. Hitting every daily goal adds a 20 XP *perfect day* bonus (this is what the streak counts), and every weekly goal adds 60. Each new LeetCode milestone (500 solved, 600, ...) is worth 100 XP, and each Codeforces rank (Specialist, Expert, ...) 200. Milestones you'd already passed before goals were turned on count with no XP. Undoing a +1 also takes back the XP for the current day, week or month.
 
 ## 7. Exams, tests and assignment deadlines
 
@@ -116,12 +126,12 @@ Open the Termux:Boot app once so Android allows it to run at startup.
 | Key | What it does |
 |---|---|
 | `leetcode_username` | Your LeetCode username (currently `xtacy`) |
+| `codeforces_handle` | Your Codeforces handle (currently `VedantZ`), for rating, rank and contest goals |
 | `city` | Weather location (currently `"Bhilai"`). If left empty, the weather line is hidden |
 | `timetable` | Weekly classes, as `"mon": [["09:30", "10:30", "Compiler", "LHC 104"], ...]` (start, end, name, room) |
 | `ical_feeds` | Classroom or Moodle calendar links for assignment deadlines (see section 7) |
 | `events` | Fixed one-off items, with the same fields as the editor. Prefer the editor, which saves to `data/events.json` |
 | `countdowns` | `{"label": "End-sem exams", "date": "2026-11-24"}`. Each entry disappears after its date |
-| `weekly_goals` | Targets for `dsa` (LeetCode submissions), `dms`, `apps` and `mocks` |
 | `rotate_seconds` | How long each page stays up before it auto-rotates |
 | `night_start` / `night_end` | The window for the dim clock-only screen |
 | `focus_presets` | The focus timer buttons, in minutes |
@@ -130,11 +140,11 @@ Edit the file in Termux with `nano ~/phone-dashboard/config.json`, or edit the l
 
 ## Where your data lives
 
-The `data/` folder holds `tracker.json` (applications), `events.json` (exams and tests), `counters.json` (weekly +1 counts), `focus.json` (focus minutes per day) and `pin.txt`. To back it up, copy the folder somewhere. Delete `pin.txt` to get a new PIN.
+The `data/` folder holds `events.json` (exams and tests), `goals.json` (your goals), `counters.json` (+1 counts), `xp.json` (XP, streak and milestones), `lc_history.json` (solved count per day, for the pace), `focus.json` (focus minutes per day) and `pin.txt`. To back it up, copy the folder somewhere. Delete `pin.txt` to get a new PIN.
 
 ## Notes
 
-- The **LeetCode submissions** goal counts submissions since Monday from LeetCode's activity calendar, not unique problems.
+- **Pace** on the Grind page needs 3 days of history, so it shows up a few days after you update.
 - **"Solved today"** on the daily problem is based on LeetCode's reset time (05:30 IST).
 - LeetCode's data comes from the same unofficial GraphQL endpoint the LeetCode website uses. If LeetCode changes it, the Grind page shows a "LeetCode failed" status in the top bar until it's fixed.
 - To run it on the laptop for testing: run `python server.py`, then open http://localhost:8080.
