@@ -3,6 +3,7 @@
   "port": 8080,
   "leetcode_username": "xtacy",
   "leetcode_refresh_min": 10,
+  "codeforces_handle": "VedantZ",
 
   "city": "Bhilai",
 
@@ -11,7 +12,6 @@
   "night_end": "07:00",
   "focus_presets": [25, 50],
 
-  "weekly_goals": { "dsa": 14, "dms": 10, "apps": 5, "mocks": 1 },
 
   "timetable": {
     "mon": [
