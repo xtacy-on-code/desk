@@ -280,7 +280,6 @@ def refresh_loop():
                     lc, lc_contests = fetch_leetcode(cfg["leetcode_username"])
                     with LOCK:
                         CACHE["leetcode"] = lc
-                    snapshot_solved(lc["solved"].get("All", 0))
                 elif job == "cf":
                     cf = fetch_codeforces()
                     with LOCK:
@@ -316,40 +315,55 @@ def refresh_loop():
 
 # ---------- state assembled for the dashboard ----------
 
-def snapshot_solved(total):
-    """Keep one LeetCode solved-count per day so the Grind page can show a real pace."""
-    path = data_path("lc_history.json")
-    hist = load_json(path, {})
-    today = dt.date.today().isoformat()
-    if hist.get(today) == total:
-        return
-    hist[today] = total
-    cutoff = (dt.date.today() - dt.timedelta(days=60)).isoformat()
-    save_json(path, {d: n for d, n in hist.items() if d >= cutoff})
+LC_STEP, CF_STEP = 10, 25   # tiny targets: every 10 solved, every 25 rating
+CF_RANKS = {1200: "Pupil", 1400: "Specialist", 1600: "Expert", 1900: "Candidate Master",
+            2100: "Master", 2300: "International Master", 2400: "Grandmaster"}
 
 
-LC_MILESTONES = [25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 600, 750, 1000, 1250, 1500, 2000, 2500, 3000]
-CF_MILESTONES = [(1200, "Pupil"), (1400, "Specialist"), (1600, "Expert"), (1900, "Candidate Master"),
-                 (2100, "Master"), (2300, "International Master"), (2400, "Grandmaster")]
+def next_multiple(value, step):
+    return (value // step + 1) * step
 
 
-def lc_pace(total):
-    """Problems per week over the last 4 weeks of snapshots, and when the next milestone lands."""
-    hist = load_json(data_path("lc_history.json"), {})
-    today = dt.date.today()
-    window = sorted((d, n) for d, n in hist.items() if d >= (today - dt.timedelta(days=28)).isoformat())
-    nxt = next((m for m in LC_MILESTONES if m > total), None)
-    if not window:
-        return {"days": 0, "next": nxt}
-    first_day, first_n = window[0]
-    days = (today - dt.date.fromisoformat(first_day)).days
-    if days < 3:
-        return {"days": days, "next": nxt}
-    per_day = (total - first_n) / days
-    eta = None
-    if nxt and per_day > 0:
-        eta = (today + dt.timedelta(days=round((nxt - total) / per_day))).isoformat()
-    return {"days": days, "perWeek": round(per_day * 7, 1), "next": nxt, "eta": eta}
+def lc_steps(upto):
+    return [(m, f"{m} LeetCode solved") for m in range(LC_STEP, upto + 1, LC_STEP)]
+
+
+def cf_steps(upto):
+    return [(r, f"Codeforces {CF_RANKS.get(r, r)}") for r in range(CF_STEP, upto + 1, CF_STEP)]
+
+
+def grind_info(lc, cu):
+    """Streak timer, best streak, today vs yesterday and the next tiny targets for the Grind page."""
+    out = {}
+    if lc:
+        cal = lc.get("calendar", {})
+        now_utc = dt.datetime.now(dt.timezone.utc)
+        today_utc = now_utc.date()
+        days = sorted(dt.date.fromisoformat(d) for d, n in cal.items() if n)
+        best = run = 0
+        prev = None
+        for d in days:
+            run = run + 1 if prev and (d - prev).days == 1 else 1
+            best = max(best, run)
+            prev = d
+        midnight = dt.datetime.combine(today_utc + dt.timedelta(days=1), dt.time(), dt.timezone.utc)
+        total = lc["solved"].get("All", 0)
+        nxt = next_multiple(total, LC_STEP)
+        out.update({
+            "streak": lc["streak"], "bestStreak": max(best, lc["streak"]),
+            # LeetCode days run on UTC, so the streak breaks at 05:30 IST unless today has a submission.
+            "safeToday": cal.get(today_utc.isoformat(), 0) > 0, "dayEnds": midnight.timestamp(),
+            "todaySubs": cal.get(today_utc.isoformat(), 0),
+            "yesterdaySubs": cal.get((today_utc - dt.timedelta(days=1)).isoformat(), 0),
+            "lcNext": {"value": total, "from": nxt - LC_STEP, "to": nxt},
+        })
+    if cu and cu.get("rating") is not None:
+        r = cu["rating"]
+        nxt = next_multiple(r, CF_STEP)
+        last = cu["contests"][-1] if cu["contests"] else None
+        out["cfNext"] = {"value": r, "from": nxt - CF_STEP, "to": nxt, "rank": cu.get("rank", ""),
+                         "lastDelta": (last["new"] - last["old"]) if last else None}
+    return out
 
 
 def schedule_for(day, cfg, all_events):
@@ -398,7 +412,7 @@ METRICS = ["manual", "lc_potd", "lc_solved", "cf_contests", "focus_min"]
 PERIODS = ["day", "week", "month"]
 GOAL_XP = {"day": 10, "week": 50, "month": 120}
 BONUS_XP = {"day": 20, "week": 60}  # every goal of that period met
-MILESTONE_XP = {"lc": 100, "cf": 200}
+MILESTONE_XP = {"lc": 20, "cf": 40}   # per tiny step
 TITLES = ["Rookie", "Apprentice", "Grinder", "Solver", "Problem Slayer", "Hacker", "Architect", "Wizard",
           "Legend", "Mythic"]
 
@@ -517,9 +531,9 @@ def sync_goals(today, lc, cu, counters, focus):
                     changed = True
 
         lc_total = lc["solved"].get("All") if lc else None
-        milestone("lc", lc_total, [(m, f"{m} LeetCode solved") for m in LC_MILESTONES], MILESTONE_XP["lc"])
-        milestone("cf", cu.get("maxRating") if cu else None,
-                  [(r, f"Codeforces {name}") for r, name in CF_MILESTONES], MILESTONE_XP["cf"])
+        milestone("lc", lc_total, lc_steps(lc_total or 0), MILESTONE_XP["lc"])
+        cf_max_rating = cu.get("maxRating") if cu else None
+        milestone("cf", cf_max_rating, cf_steps(cf_max_rating or 0), MILESTONE_XP["cf"])
 
         perfect_days = {k.split(":", 2)[2] for k in awards if k.startswith("perfect:day:")}
         day = today if today.isoformat() in perfect_days else today - dt.timedelta(days=1)
@@ -547,21 +561,15 @@ def sync_goals(today, lc, cu, counters, focus):
         ("Level 10", lvl["level"] >= 10), ("Specialist", cf_max >= 1400), ("Expert", cf_max >= 1600),
     ]
 
-    def next_step(value, steps):
-        prev = 0
-        for step, name in steps:
-            if value < step:
-                return {"value": value, "from": prev, "to": step, "name": name}
-            prev = step
-        return {"value": value, "from": prev, "to": None, "name": "All done"}
-
     milestones = []
     if lc_total is not None:
-        milestones.append({"track": "LeetCode", "unit": "solved",
-                           **next_step(lc_total, [(m, f"{m} solved") for m in LC_MILESTONES])})
+        to = next_multiple(lc_total, LC_STEP)
+        milestones.append({"track": "LeetCode", "unit": "solved", "value": lc_total, "from": to - LC_STEP,
+                           "to": to, "name": f"{to} solved", "xp": MILESTONE_XP["lc"]})
     if cu and cu.get("rating") is not None:
-        milestones.append({"track": "Codeforces", "unit": "rating",
-                           **next_step(cu["rating"], CF_MILESTONES)})
+        to = next_multiple(cu["rating"], CF_STEP)
+        milestones.append({"track": "Codeforces", "unit": "rating", "value": cu["rating"], "from": to - CF_STEP,
+                           "to": to, "name": CF_RANKS.get(to, str(to)), "xp": MILESTONE_XP["cf"]})
     return {
         "goals": [{k: r[k] for k in ("id", "label", "period", "metric", "target", "value", "xp")}
                   | {"met": r["value"] is not None and r["value"] >= r["target"]} for r in rows],
@@ -587,9 +595,7 @@ def build_state():
     ws = week_start(today)
     week_days = [(ws + dt.timedelta(days=i)).isoformat() for i in range(7)]
     state["progress"] = sync_goals(today, lc, cu, counters, focus)
-    if lc:
-        state["pace"] = lc_pace(lc["solved"].get("All", 0))
-        state["lcWeek"] = sum(lc.get("calendar", {}).get(d, 0) for d in week_days)
+    state["grind"] = grind_info(lc, cu)
     state["focus"] = {"today": focus.get(today.isoformat(), 0),
                       "week": sum(focus.get(d, 0) for d in week_days),
                       "presets": cfg.get("focus_presets", [25, 50])}
