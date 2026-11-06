@@ -135,7 +135,7 @@ def fetch_leetcode(username):
         "recent": [{"title": s["title"], "slug": s["titleSlug"], "ts": int(s["timestamp"])}
                    for s in recent],
         "daily": {"title": daily["question"]["title"], "difficulty": daily["question"]["difficulty"],
-                  "slug": daily["question"]["titleSlug"],
+                  "slug": daily["question"]["titleSlug"], "date": daily["date"],
                   "url": "https://leetcode.com" + daily["link"], "done": daily_done},
     }, lc_contests
 
@@ -280,6 +280,7 @@ def refresh_loop():
                     lc, lc_contests = fetch_leetcode(cfg["leetcode_username"])
                     with LOCK:
                         CACHE["leetcode"] = lc
+                    update_potd_log(lc)
                 elif job == "cf":
                     cf = fetch_codeforces()
                     with LOCK:
@@ -332,6 +333,73 @@ def cf_steps(upto):
     return [(r, f"Codeforces {CF_RANKS.get(r, r)}") for r in range(CF_STEP, upto + 1, CF_STEP)]
 
 
+CHALLENGES_QUERY = """query($y:Int!,$m:Int!){
+ dailyCodingChallengeV2(year:$y, month:$m){ challenges{ date question{ titleSlug } } } }"""
+
+
+def _utc_day(ts):
+    return dt.datetime.fromtimestamp(int(ts), dt.timezone.utc).date()
+
+
+def update_potd_log(lc):
+    """Remember which days' POTD you solved, in data/potd.json.
+
+    LeetCode's public API only shows your last 20 accepted submissions (about a week), so the
+    server keeps its own log from then on. "since" is the oldest day it could ever see; a chain
+    that reaches it might be longer, which the page shows as "8+".
+    """
+    path = data_path("potd.json")
+    log = load_json(path, {})
+    before = json.dumps(log, sort_keys=True)
+    challenges = log.setdefault("challenges", {})   # UTC date -> problem slug
+    done = set(log.get("done", []))
+    today = dt.datetime.now(dt.timezone.utc).date()
+    daily = lc["daily"]
+    if daily.get("date"):
+        challenges[daily["date"]] = daily["slug"]
+    solved = {(_utc_day(s["ts"]).isoformat(), s["slug"]) for s in lc.get("recent", [])}
+    oldest = min((_utc_day(s["ts"]) for s in lc.get("recent", [])), default=today)
+    log.setdefault("since", oldest.isoformat())
+    days = [oldest + dt.timedelta(days=i) for i in range((today - oldest).days + 1)]
+    for y, m in sorted({(d.year, d.month) for d in days if d.isoformat() not in challenges}):
+        try:
+            res = http_json("https://leetcode.com/graphql", {"query": CHALLENGES_QUERY, "variables": {"y": y, "m": m}},
+                            {"Referer": "https://leetcode.com"})
+            for c in res["data"]["dailyCodingChallengeV2"]["challenges"]:
+                challenges[c["date"]] = c["question"]["titleSlug"]
+        except Exception:
+            pass  # try again next refresh
+    for d in days:
+        key = d.isoformat()
+        if (key, challenges.get(key)) in solved:
+            done.add(key)
+    if daily.get("done"):
+        done.add(today.isoformat())
+    cutoff = (today - dt.timedelta(days=400)).isoformat()
+    log["done"] = sorted(d for d in done if d >= cutoff)
+    log["challenges"] = {d: v for d, v in challenges.items() if d >= cutoff}
+    if json.dumps(log, sort_keys=True) != before:
+        save_json(path, log)
+
+
+def potd_chain():
+    log = load_json(data_path("potd.json"), {})
+    done = set(log.get("done", []))
+    if not done:
+        return None
+    today = dt.datetime.now(dt.timezone.utc).date()
+    day = today if today.isoformat() in done else today - dt.timedelta(days=1)
+    streak = 0
+    while day.isoformat() in done:
+        streak += 1
+        day -= dt.timedelta(days=1)
+    first = day + dt.timedelta(days=1)
+    recent = [(today - dt.timedelta(days=i)).isoformat() for i in range(13, -1, -1)]
+    return {"streak": streak, "doneToday": today.isoformat() in done,
+            "atLeast": streak > 0 and first.isoformat() <= log.get("since", ""),
+            "last14": [True if d in done else None if d < log.get("since", "") else False for d in recent]}
+
+
 def grind_info(lc, cu):
     """Streak timer, best streak, today vs yesterday and the next tiny targets for the Grind page."""
     out = {}
@@ -356,6 +424,9 @@ def grind_info(lc, cu):
             "todaySubs": cal.get(today_utc.isoformat(), 0),
             "yesterdaySubs": cal.get((today_utc - dt.timedelta(days=1)).isoformat(), 0),
             "lcNext": {"value": total, "from": nxt - LC_STEP, "to": nxt},
+            "solved": {k: lc["solved"].get(k, 0) for k in ("All", "Easy", "Medium", "Hard")},
+            "totalQuestions": lc["totals"].get("All", 0),
+            "potd": potd_chain(),
         })
     if cu and cu.get("rating") is not None:
         r = cu["rating"]
@@ -404,7 +475,6 @@ def pick_schedule(cfg, all_events):
 DEFAULT_GOALS = [
     {"id": "potd", "label": "LeetCode POTD", "period": "day", "metric": "lc_potd", "target": 1},
     {"id": "lc2", "label": "LeetCode problems", "period": "day", "metric": "lc_solved", "target": 2},
-    {"id": "dms", "label": "Referral DMs / cold mails", "period": "week", "metric": "manual", "target": 10},
     {"id": "apps", "label": "Applications sent", "period": "week", "metric": "manual", "target": 5},
     {"id": "cfc", "label": "Codeforces contests", "period": "month", "metric": "cf_contests", "target": 3},
 ]
