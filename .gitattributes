@@ -1,0 +1,3 @@
+# Termux runs these, so keep Unix line endings even when committed from Windows.
+*.sh text eol=lf
+*.py text eol=lf
