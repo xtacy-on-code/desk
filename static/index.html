@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d0e10">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Desk</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="app" id="app">
+    <header class="top">
+      <nav class="tabs" aria-label="Pages">
+        <button class="tab" data-page="0" aria-current="page">Today</button>
+        <button class="tab" data-page="1">Grind</button>
+        <button class="tab" data-page="2">Hunt</button>
+      </nav>
+      <div class="alert" id="alert" hidden></div>
+      <div class="status">
+        <button class="fs-btn" id="fsBtn" hidden>Full screen</button>
+        <span class="num" id="topClock" hidden></span>
+        <span id="battery" hidden></span>
+        <span class="sync" id="sync"><i></i><span>Loading</span></span>
+      </div>
+    </header>
+
+    <main class="pages" id="pages">
+      <!-- TODAY -->
+      <section class="page today is-active" aria-label="Today">
+        <div class="col">
+          <div class="clock num" id="clock">--:--<small>--</small></div>
+          <div class="date" id="date"></div>
+          <div class="weather" id="weather"></div>
+          <div class="block grow">
+            <h2>Coming up <span class="more" id="upcomingMore"></span></h2>
+            <ul class="rows" id="upcoming"></ul>
+          </div>
+        </div>
+        <div class="col">
+          <div class="block grow">
+            <h2>Schedule</h2>
+            <ul class="rows" id="schedule"></ul>
+          </div>
+          <div class="focus" id="focus">
+            <svg class="ring" viewBox="0 0 64 64" aria-hidden="true">
+              <circle cx="32" cy="32" r="28" class="ring-bg"/>
+              <circle cx="32" cy="32" r="28" class="ring-fg" id="ringFg"/>
+            </svg>
+            <div class="focus-time num" id="focusTime">25:00</div>
+            <div class="focus-body">
+              <div class="focus-actions" id="focusActions"></div>
+              <div class="focus-total" id="focusTotal"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- GRIND -->
+      <section class="page grind" aria-label="Grind">
+        <div class="col">
+          <div class="solved">
+            <span class="big num" id="solvedTotal">—</span>
+            <span class="muted num" id="solvedOf"></span>
+            <span class="label">solved</span>
+          </div>
+          <div class="split" id="split" aria-hidden="true"></div>
+          <div class="legend" id="legend"></div>
+          <div class="stats" id="stats"></div>
+          <div class="heat" id="heat" aria-label="Submissions over the last 18 weeks"></div>
+        </div>
+        <div class="col">
+          <div class="block">
+            <h2>Daily problem</h2>
+            <a class="daily" id="daily" target="_blank" rel="noopener"></a>
+          </div>
+          <div class="block grow">
+            <h2>Upcoming contests</h2>
+            <ul class="rows" id="contests"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- HUNT -->
+      <section class="page hunt" aria-label="Hunt">
+        <div class="col">
+          <div class="pipeline" id="pipeline"></div>
+          <div class="block grow">
+            <h2>Applications</h2>
+            <ul class="rows" id="apps"></ul>
+          </div>
+        </div>
+        <div class="col">
+          <div class="block grow">
+            <h2>This week</h2>
+            <ul class="goals" id="goals"></ul>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="night" id="night" hidden>
+    <div class="night-clock num" id="nightClock"></div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
