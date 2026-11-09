@@ -1,6 +1,10 @@
 # Desk: a dashboard that runs on your spare phone
 
-The Galaxy A13 runs a small Python server in Termux and shows the dashboard full-screen in landscape.
+Turn an old Android phone into an always-on study and grind dashboard for your desk. The phone runs a small Python server in Termux and shows the dashboard full-screen in landscape. It needs nothing beyond Python: no npm, no API keys.
+
+![The Grind page: LeetCode streak with a countdown, POTD chain, solved split, daily quest, next target and next contests](docs/grind.png)
+
+![The Today page: clock, weather, upcoming exams, class schedule and focus timer](docs/today.png)
 
 - **Today:** clock, date, weather, countdowns, a focus timer that logs your minutes, and your class schedule. Once today's last class ends, the schedule switches to the next day that has classes.
 - **Grind:** your LeetCode streak with a live countdown to when it breaks (05:30 IST), your POTD chain (days in a row you solved the problem of the day, with the last 14 days as pips), problems solved split into Easy, Medium and Hard, the daily problem as a quest, tiny next targets (the next 10 LeetCode solves, the next 25 Codeforces rating), today's submissions against yesterday's, and a countdown to the next contest.
@@ -40,6 +44,28 @@ git clone https://github.com/xtacy-on-code/desk.git ~/phone-dashboard
 ```
 
 That's the whole dashboard. Your own settings and data go in `~/phone-dashboard/data/`, which git never touches (see "Updating" below).
+
+Now make it yours. Create your personal settings file:
+
+```
+nano ~/phone-dashboard/data/config.json
+```
+
+and put in your own details (every key is optional, see "Settings" below):
+
+```
+{
+  "name": "Your name",
+  "leetcode_username": "your-leetcode-username",
+  "codeforces_handle": "your-codeforces-handle",
+  "city": "Your city",
+  "timetable": {
+    "mon": [["09:00", "10:00", "Algorithms", "Room 101"]]
+  }
+}
+```
+
+Save with **Ctrl+O**, **Enter**, then **Ctrl+X**. The `config.json` in the repo is only an example with these left blank.
 
 ## 3. Start it
 
@@ -123,14 +149,16 @@ Open the Termux:Boot app once so Android allows it to run at startup.
 
 ---
 
-## Settings (`config.json`)
+## Settings
+
+Put these in `data/config.json` (yours, private). Anything you leave out falls back to the example `config.json` from the repo.
 
 | Key | What it does |
 |---|---|
-| `leetcode_username` | Your LeetCode username (currently `xtacy`) |
-| `codeforces_handle` | Your Codeforces handle (currently `VedantZ`), for rating, rank and contest goals |
+| `leetcode_username` | Your LeetCode username. Empty turns the LeetCode parts off |
+| `codeforces_handle` | Your Codeforces handle, for rating, rank and contest goals |
 | `potd_streak_seed` | Your real POTD streak, told once: `{"days": 69, "through": "2026-11-05"}` (the last day it covers, in LeetCode's UTC days). LeetCode only shows this number when you're logged in, so the server starts from it and keeps counting with its own log |
-| `city` | Weather location (currently `"Bhilai"`). If left empty, the weather line is hidden |
+| `city` | Weather location, for example `"Pune"`. If left empty, the weather line is hidden |
 | `timetable` | Weekly classes, as `"mon": [["09:30", "10:30", "Compiler", "LHC 104"], ...]` (start, end, name, room) |
 | `ical_feeds` | Classroom or Moodle calendar links for assignment deadlines (see section 7) |
 | `events` | Fixed one-off items, with the same fields as the editor. Prefer the editor, which saves to `data/events.json` |
@@ -139,12 +167,10 @@ Open the Termux:Boot app once so Android allows it to run at startup.
 | `night_start` / `night_end` | The window for the dim clock-only screen |
 | `focus_presets` | The focus timer buttons, in minutes |
 
-`config.json` holds the defaults and comes from GitHub. **Put your own changes in `data/config.json` instead**: any key there overrides the same key in `config.json`, and updates never touch it. For example, to add Classroom links, in Termux run `nano ~/phone-dashboard/data/config.json` and write:
+Any key in `data/config.json` overrides the same key in `config.json`, and updates never touch it. For example, to add Classroom links, add this key next to the others in `data/config.json`:
 
 ```
-{
-  "ical_feeds": [{"name": "Classroom", "url": "https://calendar.google.com/calendar/ical/.../basic.ics"}]
-}
+"ical_feeds": [{"name": "Classroom", "url": "https://calendar.google.com/calendar/ical/.../basic.ics"}]
 ```
 
 The server picks up changes without a restart.
@@ -180,6 +206,10 @@ The `data/` folder holds `events.json` (exams and tests), `goals.json` (your goa
 
 - The **POTD chain** starts from `potd_streak_seed` and then counts from the server's own log, because LeetCode's public data only covers your last 20 accepted submissions. Without a seed it shows something like `8+`. Keep the server running daily (or at least every few days) so no solved day gets missed.
 - The look is "Royal loot": purple and gold with soft glass panels, in the **Bungee** (numbers and labels) and **Rubik** (text) fonts. Both are bundled in `static/fonts/` under the SIL Open Font License (see the `OFL-*.txt` files), so it works offline.
-- **"Solved today"** on the daily problem is based on LeetCode's reset time (05:30 IST).
+- **"Solved today"** on the daily problem is based on LeetCode's reset time (00:00 UTC, which is 05:30 IST).
 - LeetCode's data comes from the same unofficial GraphQL endpoint the LeetCode website uses. If LeetCode changes it, the Grind page shows a "LeetCode failed" status in the top bar until it's fixed.
-- To run it on the laptop for testing: run `python server.py`, then open http://localhost:8080.
+- To run it on the laptop for testing: run `python server.py`, then open http://localhost:8080. Add `#grind`, `#today` or `#quests` to the address to open a page directly.
+
+## Licence
+
+The code is under the MIT License (see `LICENSE`). The Bungee and Rubik fonts are under the SIL Open Font License (see `static/fonts/OFL-*.txt`).
