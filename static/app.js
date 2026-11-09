@@ -488,7 +488,8 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 
 /* ---------------- start ---------------- */
 
-show(0);
+// Open a page directly with /#today, /#grind or /#quests (handy for bookmarks and screenshots).
+show(Math.max(0, ["#today", "#grind", "#quests"].indexOf(location.hash)));
 tick();
 load();
 keepAwake();
