@@ -251,7 +251,7 @@ function renderToday() {
     : `Set <code class="num">"city"</code> in config.json for weather`;
 
   const today = new Date().setHours(0, 0, 0, 0);
-  const up = state.upcoming.slice(0, 3);
+  const up = state.upcoming.slice(0, 4);
   const more = state.upcoming.length - up.length;
   $("upcomingMore").textContent = more > 0 ? `+${more} more` : "";
   $("upcoming").innerHTML = up.length ? up.map((u) => {

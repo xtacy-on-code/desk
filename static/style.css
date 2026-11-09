@@ -175,9 +175,10 @@ h2 .val small { font-size: 11px; color: var(--muted); }
 .sk { display: block; height: 14px; border-radius: 7px; background: var(--track); margin: 6px 0; }
 
 /* ---------- today ---------- */
-.clock { font-size: 78px; line-height: 0.95; color: var(--gold); letter-spacing: -0.01em; }
+.clock { font-size: 64px; line-height: 0.95; color: var(--gold); letter-spacing: -0.01em; }
 .clock small { font-size: 22px; color: var(--muted); margin-left: 8px; }
-.date { margin-top: 6px; font-size: 15px; font-weight: 500; }
+.date { margin-top: 2px; font-size: 15px; font-weight: 500; }
+#upcoming li { padding: 4px 0; }
 .weather { margin: 2px 0 2px; font-size: 13px; color: var(--muted); }
 .weather b { color: var(--text); font-weight: 500; }
 .sched li { position: relative; padding-left: 14px; grid-template-columns: 50px 1fr auto; }
