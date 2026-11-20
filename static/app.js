@@ -37,8 +37,15 @@ function mins(m) {
 const pages = [...document.querySelectorAll(".page")];
 const tabs = [...document.querySelectorAll(".tab")];
 
+// Pages whose tab is hidden (Exams outside exam season) are skipped by swipes and auto-rotate.
+const visible = () => pages.map((_, i) => i).filter((i) => !tabs[i].hidden);
+function step(from, dir) {
+  const v = visible(), k = v.indexOf(from);
+  return v[(k === -1 ? 0 : k + dir + v.length) % v.length];
+}
+
 function show(i, dir = 1) {
-  const next = (i + pages.length) % pages.length;
+  const next = tabs[i] && !tabs[i].hidden ? i : step(i, 1);
   if (next !== page) {
     // Enter from the side you're heading to, leave towards the other: swipes feel spatial.
     const inc = pages[next], out = pages[page];
@@ -54,6 +61,11 @@ function show(i, dir = 1) {
   tabs.forEach((t, n) => n === page ? t.setAttribute("aria-current", "page") : t.removeAttribute("aria-current"));
   $("topClock").hidden = page === 0;
   moveTabInd();
+  renderDots();
+}
+
+function renderDots() {
+  $("dots").innerHTML = visible().map((i) => `<i class="${i === page ? "on" : ""}"></i>`).join("");
 }
 
 function moveTabInd() {
@@ -71,7 +83,7 @@ $("pages").addEventListener("pointerup", (e) => {
   if (downX === null) return;
   const dx = e.clientX - downX;
   downX = null;
-  if (Math.abs(dx) > 50) { lastTouch = Date.now(); show(page + (dx < 0 ? 1 : -1), dx < 0 ? 1 : -1); }
+  if (Math.abs(dx) > 50) { lastTouch = Date.now(); show(step(page, dx < 0 ? 1 : -1), dx < 0 ? 1 : -1); }
 });
 document.addEventListener("pointerdown", () => { lastTouch = Date.now(); });
 
@@ -109,7 +121,7 @@ setInterval(() => {
   if (focus.running()) { if (page !== 0) show(0); lastRotate = Date.now(); return; }
   if (Date.now() - lastTouch > 120_000 && Date.now() - lastRotate >= every) {
     lastRotate = Date.now();
-    show(page + 1);
+    show(step(page, 1));
   }
 }, 1000);
 
@@ -308,8 +320,13 @@ function render() {
   renderTop();
   renderToday();
   renderGrind();
+  renderPlan();
+  renderArena();
+  renderExamsPage();
   renderGoals();
+  runTicks();
   celebrate();
+  maybeRecap();
   renderFocus(true);
 }
 
@@ -411,7 +428,7 @@ function renderGrind() {
     $("lcStreak").textContent = "--";
     $("streakTimer").textContent = "LeetCode loading";
   } else {
-    $("lcStreak").textContent = g.streak;
+    tickTo($("lcStreak"), g.streak);
 
     const p = g.potd;
     $("potd").innerHTML = p ? `
@@ -423,7 +440,7 @@ function renderGrind() {
 
     const s = g.solved, parts = [["Easy", "easy"], ["Medium", "medium"], ["Hard", "hard"]];
     $("solved").innerHTML = `
-      <h2>Solved <span class="val disp">${s.All} <small>/ ${inr.format(g.totalQuestions)}</small></span></h2>
+      <h2>Solved <span class="val disp"><span class="tick" data-key="solved" data-to="${s.All}">${s.All}</span> <small>/ ${inr.format(g.totalQuestions)}</small></span></h2>
       <div class="split">${parts.map(([k, c]) => `<i class="${c}" style="flex:${s[k] || 0.01}"></i>`).join("")}</div>
       <div class="s-row">
         <div class="legend">${parts.map(([k, c]) => `<span class="${c}">${k} <b>${s[k]}</b></span>`).join("")}</div>
@@ -471,6 +488,8 @@ function renderTimers() {
   const g = state?.grind;
   if (!g) return;
   const now = Date.now() / 1000;
+  const ex = state.exams?.[0];
+  if (ex && $("examIn")) $("examIn").textContent = examWhen(ex);
   if (g.dayEnds) {
     const left = g.dayEnds - now;
     const risky = !g.safeToday;
@@ -496,17 +515,20 @@ const PERIOD_TAG = { day: "Day", week: "Week", month: "Month" };
 
 function renderGoals() {
   const g = state.progress;
-  $("lvl").textContent = g.level;
+  tickTo($("lvl"), g.level);
   $("lvlTitle").textContent = g.title;
   $("xpFill").style.transform = `scaleX(${g.into / g.need})`;
   $("lvlXp").textContent = `${g.into} / ${g.need} XP to level ${g.level + 1}`;
   $("streak").textContent = g.streak;
   $("bestPerfect").textContent = g.bestStreak;
-  $("xpTotal").textContent = inr.format(g.xp);
+  tickTo($("xpTotal"), g.xp);
 
   const got = g.badges.filter((b) => b.got).length;
   $("badgeCount").textContent = `${got}/${g.badges.length}`;
-  $("badges").innerHTML = g.badges.map((b) => `<span class="${b.got ? "got" : ""}">${esc(b.name)}</span>`).join("");
+  const sorted = [...g.badges].sort((a, b) => b.got - a.got);
+  const SHOW = 7;
+  $("badges").innerHTML = sorted.slice(0, SHOW).map((b) => `<span class="${b.got ? "got" : ""}">${esc(b.name)}</span>`).join("")
+    + (sorted.length > SHOW ? `<span class="more-b">+${sorted.length - SHOW} more</span>` : "");
 
   const order = { day: 0, week: 1, month: 2 };
   const goals = [...g.goals].sort((a, b) => order[a.period] - order[b.period]);
@@ -529,9 +551,239 @@ $("goals").addEventListener("click", async (e) => {
   const b = e.target.closest("[data-goal]");
   if (!b) return;
   b.disabled = true;
+  if (+b.dataset.delta > 0) pop(b);
   try { await api("POST", "/api/counter", { id: b.dataset.goal, delta: +b.dataset.delta }); await load(); }
   catch {} finally { b.disabled = false; }
 });
+
+/* ---------------- plan: top 3 + mess ---------------- */
+
+function renderPlan() {
+  const t = state.tasks || [];
+  $("tasksMore").textContent = t.length ? `${t.filter((x) => x.done).length}/${t.length} done` : "";
+  $("tasks").innerHTML = t.length ? t.map((x, i) => `
+    <li class="${x.done ? "done" : ""}"><button class="check" data-task="${i}" aria-label="${x.done ? "Untick" : "Tick"} ${esc(x.text)}">${x.done ? "&#10003;" : ""}</button>
+      <span class="task-text">${esc(x.text)}</span></li>`).join("")
+    : `<li class="empty">No tasks for today yet. Add your top 3 from the editor on your laptop (/edit).</li>`;
+
+  const m = state.mess;
+  const day = DAYS[new Date().getDay()];
+  $("mess").innerHTML = m ? `<h2>Mess · ${day}</h2><ul class="meals">${m.meals.map((x) => `
+      <li class="${x.name === m.next ? "next" : ""}"><span class="meal">${x.name}${x.name === m.next ? ` <span class="tag mini">Next</span>` : ""}</span>
+      <span class="items">${esc(x.items)}</span></li>`).join("")}</ul>`
+    : `<h2>Mess · ${day}</h2><p class="empty">No menu yet. Add the weekly menu in the editor (/edit).</p>`;
+}
+
+$("tasks").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-task]");
+  if (!b) return;
+  lastTouch = Date.now();
+  if (!b.closest("li").classList.contains("done")) pop(b);
+  try { await api("POST", "/api/tasks/toggle", { index: +b.dataset.task }); await load(); } catch {}
+});
+
+/* ---------------- arena: pet, boss, rating ---------------- */
+
+// The desk pet grows with your level and reacts to the streak and the time of day.
+function petSvg(level, mood) {
+  const stage = level >= 10 ? 4 : level >= 7 ? 3 : level >= 4 ? 2 : level >= 2 ? 1 : 0;
+  const ink = "#16130f", red = "#e23b2e", card = "#fffdf8";
+  if (stage === 0) {
+    return `<svg viewBox="0 0 120 120" class="pet-svg"><ellipse cx="60" cy="66" rx="30" ry="38" fill="${card}" stroke="${ink}" stroke-width="4"/>
+      <path d="M38 62 l8 -6 l8 7 l8 -7 l8 7 l8 -6 l6 5" fill="none" stroke="${ink}" stroke-width="3" stroke-linejoin="round"/>
+      <circle cx="50" cy="80" r="3.5" fill="${ink}"/><circle cx="70" cy="80" r="3.5" fill="${ink}"/></svg>`;
+  }
+  const r = 26 + stage * 3, cy = 72;
+  const eyes = mood === "sleepy"
+    ? `<path d="M${60 - 13} ${cy - 4} q5 4 10 0 M${60 + 3} ${cy - 4} q5 4 10 0" fill="none" stroke="${ink}" stroke-width="3" stroke-linecap="round"/>`
+    : `<circle cx="${60 - 9}" cy="${cy - 5}" r="4.5" fill="${ink}"/><circle cx="${60 + 9}" cy="${cy - 5}" r="4.5" fill="${ink}"/>`;
+  const mouth = mood === "worried" ? `<path d="M52 ${cy + 12} q8 -6 16 0" fill="none" stroke="${ink}" stroke-width="3" stroke-linecap="round"/>`
+    : mood === "sleepy" ? `<ellipse cx="60" cy="${cy + 11}" rx="4" ry="3" fill="${ink}"/>`
+    : `<path d="M50 ${cy + 7} q10 10 20 0" fill="none" stroke="${ink}" stroke-width="3" stroke-linecap="round"/>`;
+  const cape = stage >= 3 ? `<path d="M${60 - r + 4} ${cy - 6} L${60 - r - 10} ${cy + r + 6} L${60 + r + 10} ${cy + r + 6} L${60 + r - 4} ${cy - 6} Z" fill="${red}" stroke="${ink}" stroke-width="3" stroke-linejoin="round"/>` : "";
+  const arms = stage >= 2 ? `<path d="M${60 - r + 2} ${cy + 4} l-12 8 M${60 + r - 2} ${cy + 4} l12 -10" stroke="${ink}" stroke-width="4" stroke-linecap="round"/>` : "";
+  const crown = stage >= 4 ? `<path d="M44 ${cy - r - 2} l4 -14 l8 9 l4 -12 l4 12 l8 -9 l4 14 Z" fill="${ink}"/><circle cx="60" cy="${cy - r - 12}" r="3" fill="${red}"/>` : "";
+  const sweat = mood === "worried" ? `<path d="M${60 + r - 2} ${cy - r + 6} q6 10 0 14 q-6 -4 0 -14 Z" fill="#9fd3ff" stroke="${ink}" stroke-width="2"/>` : "";
+  const zzz = mood === "sleepy" ? `<text x="${60 + r - 6}" y="${cy - r + 4}" font-family="Bangers" font-size="18" fill="${ink}">z z</text>` : "";
+  return `<svg viewBox="0 0 120 120" class="pet-svg">${cape}${arms}
+    <ellipse cx="60" cy="${cy}" rx="${r}" ry="${r - 3}" fill="${card}" stroke="${ink}" stroke-width="4"/>
+    <ellipse cx="${60 - 17}" cy="${cy + 6}" rx="5" ry="3" fill="${red}" opacity="0.35"/><ellipse cx="${60 + 17}" cy="${cy + 6}" rx="5" ry="3" fill="${red}" opacity="0.35"/>
+    ${eyes}${mouth}${crown}${sweat}${zzz}</svg>`;
+}
+
+function renderArena() {
+  const g = state.progress, gr = state.grind || {};
+  const hour = new Date().getHours();
+  const risky = gr.dayEnds && !gr.safeToday && hour >= 18;
+  const mood = inNight(new Date()) ? "sleepy" : risky ? "worried" : "happy";
+  const stageName = ["Egg", "Hatchling", "Kid", "Hero", "Legend"][g.level >= 10 ? 4 : g.level >= 7 ? 3 : g.level >= 4 ? 2 : g.level >= 2 ? 1 : 0];
+  const next = g.level < 2 ? 2 : g.level < 4 ? 4 : g.level < 7 ? 7 : g.level < 10 ? 10 : null;
+  const line = mood === "worried" ? "Worried about your streak. Solve one?"
+    : mood === "sleepy" ? "Sleeping. Tap the screen to wake"
+    : gr.streak ? `Happy. ${gr.streak} days fed` : "Happy";
+  $("pet").innerHTML = `${petSvg(g.level, mood)}
+    <div class="pet-body"><div class="pet-name disp">${esc(state.pet?.name || "Bit")}</div>
+      <div class="pet-stage">${stageName} · level ${g.level}</div>
+      <div class="sub">${line}</div>
+      <div class="sub">${next ? `Evolves at level ${next}` : "Fully evolved"}</div></div>`;
+
+  // Codeforces rating as a small inked line, last point in red.
+  const cs = (state.codeforces?.contests || []).slice(-20);
+  if (cs.length >= 2) {
+    const vals = cs.map((c) => c.new), lo = Math.min(...vals), hi = Math.max(...vals);
+    const W = 320, H = 72, span = hi - lo || 1;
+    const pts = vals.map((v, i) => [(i / (vals.length - 1)) * W, H - 6 - ((v - lo) / span) * (H - 12)]);
+    const last = pts[pts.length - 1], d = cs[cs.length - 1].new - cs[cs.length - 1].old;
+    $("rating").innerHTML = `<h2>Codeforces rating <span class="val disp">${vals[vals.length - 1]}</span></h2>
+      <svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-label="Rating over the last ${cs.length} contests">
+        <line x1="0" y1="${H - 6}" x2="${W}" y2="${H - 6}" class="grid"/><line x1="0" y1="6" x2="${W}" y2="6" class="grid"/>
+        <polyline points="${pts.map((p) => p.join(",")).join(" ")}" class="line"/>
+        <circle cx="${last[0]}" cy="${last[1]}" r="5" class="dot"/></svg>
+      <div class="sub">${lo} to ${hi} over ${cs.length} contests · last round ${d >= 0 ? "+" : ""}${d}</div>`;
+  } else {
+    $("rating").innerHTML = `<h2>Codeforces rating</h2><p class="empty">The graph shows up after two rated contests.</p>`;
+  }
+
+  // Weekly boss: HP is the XP you need to earn this week.
+  const b = g.boss;
+  if (b) {
+    const left = b.hp - b.dealt, pct = left / b.hp;
+    $("boss").innerHTML = `<span class="tag">${b.defeated ? "Defeated" : "Week boss"}</span>
+      <h2>Weekly boss</h2>
+      <div class="boss-row">${bossSvg(b.defeated)}
+        <div><div class="boss-name disp">${esc(b.name)}</div>
+          <div class="sub">${b.defeated ? "Beaten this week. +100 XP" : `${left} HP left`} · ends in ${hms(b.endsAt - Date.now() / 1000)}</div></div></div>
+      <div class="hp"><i style="transform:scaleX(${pct})"></i></div>
+      <div class="hp-nums"><span><span class="tick" data-key="dealt" data-to="${b.dealt}">${b.dealt}</span> damage dealt</span><span>${b.hp} HP</span></div>
+      <ul class="dmg"><li>Clear a daily quest<b>10</b></li><li>Clear a weekly quest<b>50</b></li><li>Hit a next target<b>20+</b></li><li>Perfect day<b>20</b></li></ul>`;
+  }
+}
+
+function bossSvg(defeated) {
+  const ink = "#16130f", red = "#e23b2e";
+  const eyes = defeated
+    ? `<path d="M40 44 l10 10 M50 44 l-10 10 M70 44 l10 10 M80 44 l-10 10" stroke="${ink}" stroke-width="4" stroke-linecap="round"/>`
+    : `<path d="M36 40 l16 6 M84 40 l-16 6" stroke="${ink}" stroke-width="4" stroke-linecap="round"/><circle cx="46" cy="52" r="5" fill="${ink}"/><circle cx="74" cy="52" r="5" fill="${ink}"/>`;
+  const mouth = defeated ? `<path d="M48 76 q12 -8 24 0" fill="none" stroke="${ink}" stroke-width="4" stroke-linecap="round"/>`
+    : `<path d="M44 70 h32 l-4 8 h-24 Z" fill="${ink}"/><path d="M50 70 v4 M58 70 v4 M66 70 v4" stroke="#fff" stroke-width="2"/>`;
+  return `<svg viewBox="0 0 120 100" class="boss-svg"><path d="M30 26 l-10 -16 l22 10 M90 26 l10 -16 l-22 10" fill="${red}" stroke="${ink}" stroke-width="3" stroke-linejoin="round"/>
+    <rect x="22" y="22" width="76" height="70" rx="20" fill="${defeated ? "#e8e1d3" : red}" stroke="${ink}" stroke-width="4"/>${eyes}${mouth}</svg>`;
+}
+
+/* ---------------- exams page ---------------- */
+
+function examWhen(e) {
+  const at = new Date(`${e.date}T${e.time || "09:00"}`);
+  const s = (at - Date.now()) / 1000;
+  return s <= 0 ? "Today" : hms(s);
+}
+
+function renderExamsPage() {
+  const ex = state.exams || [];
+  const tab = tabs[5];
+  const was = tab.hidden;
+  tab.hidden = !ex.length;
+  if (was !== tab.hidden) { if (tab.hidden && page === 5) show(0); else renderDots(); }
+  // Opened with /#exams before the tab existed: jump there once the exams have loaded.
+  if (!tab.hidden && location.hash === "#exams" && !renderExamsPage.jumped) { renderExamsPage.jumped = true; show(5); }
+  if (!ex.length) return;
+  const e = ex[0];
+  const pct = e.total ? Math.round((e.done / e.total) * 100) : 0;
+  const d = new Date(e.date + "T00:00");
+  const shown = e.topics.slice(0, 5);
+  $("examHero").innerHTML = `<span class="tag">Next exam</span>
+    <h2>${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}${e.time ? ` · ${esc(e.time)}` : ""}${e.kind !== "Exam" ? ` · ${esc(e.kind)}` : ""}</h2>
+    <div class="exam-top"><span class="exam-subj disp">${esc(e.title)}</span><span class="exam-in disp" id="examIn">${examWhen(e)}</span></div>
+    <div class="hp ink"><i style="transform:scaleX(${e.total ? e.done / e.total : 0})"></i></div>
+    <div class="hp-nums"><span>Syllabus ${e.done}/${e.total} topics</span><span>${pct}%</span></div>
+    <ul class="topics">${shown.length ? shown.map((t, i) => `<li class="${t.done ? "done" : ""}"><button class="check" data-topic="${i}" data-subject="${esc(e.subject)}" aria-label="${t.done ? "Untick" : "Tick"} ${esc(t.topic)}">${t.done ? "&#10003;" : ""}</button><span>${esc(t.topic)}</span></li>`).join("")
+      : `<li class="empty">No topics yet. Add the syllabus in the editor (/edit).</li>`}${e.topics.length > 5 ? `<li class="more-t">+${e.topics.length - 5} more topics</li>` : ""}</ul>`;
+  $("examList").innerHTML = `<h2>All exams <span class="more">${ex.length}</span></h2><ul class="rows exam-rows">${ex.map((x) => {
+      const xd = new Date(x.date + "T00:00"), p = x.total ? x.done / x.total : 0;
+      return `<li><span class="t">${DAYS[xd.getDay()].slice(0, 3)} ${xd.getDate()}</span><span class="main">${esc(x.title)}${x.kind !== "Exam" ? ` <span class="kind kind-${esc(x.kind.replace(/\s/g, ""))}">${esc(x.kind)}</span>` : ""}</span>
+        <span class="side"><span class="mini-bar"><i style="transform:scaleX(${p})"></i></span>${x.total ? Math.round(p * 100) + "%" : "no topics"}</span></li>`;
+    }).join("")}</ul>`;
+}
+
+$("examHero").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-topic]");
+  if (!b) return;
+  lastTouch = Date.now();
+  if (!b.closest("li").classList.contains("done")) pop(b);
+  try { await api("POST", "/api/syllabus/toggle", { subject: b.dataset.subject, index: +b.dataset.topic }); await load(); } catch {}
+});
+
+/* ---------------- comic moments ---------------- */
+
+// A word pops out of whatever you just tapped.
+const POPS = ["Ka-ching", "Pow", "Bam", "Boom", "Zap", "Yes"];
+function pop(el) {
+  const r = el.getBoundingClientRect(), w = document.createElement("span");
+  w.className = "pop disp";
+  w.textContent = POPS[Math.floor(Math.random() * POPS.length)];
+  w.style.left = `${r.left + r.width / 2}px`;
+  w.style.top = `${r.top}px`;
+  document.body.appendChild(w);
+  w.addEventListener("animationend", () => w.remove());
+  try { navigator.vibrate?.(30); } catch {}
+}
+
+// Numbers roll up to their new value instead of jumping.
+const tickPrev = {};
+function tickTo(el, to) {
+  const from = el.dataset.v === undefined ? to : +el.dataset.v;
+  el.dataset.v = to;
+  animateNum(el, from, to);
+}
+function runTicks() {
+  document.querySelectorAll(".tick[data-key]").forEach((el) => {
+    const key = el.dataset.key, to = +el.dataset.to;
+    const from = tickPrev[key] ?? to;
+    tickPrev[key] = to;
+    animateNum(el, from, to);
+  });
+}
+function animateNum(el, from, to) {
+  if (from === to || matchMedia("(prefers-reduced-motion: reduce)").matches) { el.textContent = inr.format(to); return; }
+  const t0 = performance.now(), dur = 600;
+  const stepFn = (t) => {
+    const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+    el.textContent = inr.format(Math.round(from + (to - from) * e));
+    if (k < 1) requestAnimationFrame(stepFn);
+  };
+  requestAnimationFrame(stepFn);
+}
+
+// Big comic splash for the rare moments: level up, boss down, perfect day, Sunday recap.
+function splash(word, title, sub, recap) {
+  const spikes = 18, pts = [];
+  for (let i = 0; i < spikes * 2; i++) {
+    const a = (Math.PI * i) / spikes, r = i % 2 ? 0.62 : 1;
+    pts.push(`${50 + Math.cos(a) * 48 * r},${50 + Math.sin(a) * 48 * r}`);
+  }
+  $("burst").innerHTML = `<svg viewBox="0 0 100 100"><polygon points="${pts.join(" ")}" fill="#e23b2e" stroke="#16130f" stroke-width="2" stroke-linejoin="round"/></svg>`;
+  $("splashWord").textContent = word;
+  $("splashTitle").textContent = title;
+  $("splashSub").textContent = sub || "";
+  $("recap").hidden = !recap;
+  $("recap").innerHTML = recap || "";
+  $("splash").hidden = false;
+  try { navigator.vibrate?.([80, 60, 160]); } catch {}
+}
+$("splashClose").addEventListener("click", () => { $("splash").hidden = true; lastTouch = Date.now(); });
+
+// Sunday from 20:00: a recap of the week, once.
+function maybeRecap() {
+  const r = state.progress.recap;
+  if (!r || !r.isSunday || new Date().getHours() < 20 || store.get("recapSeen") === r.week) return;
+  store.set("recapSeen", r.week);
+  const b = state.progress.boss;
+  splash("That's a wrap", `Week ${r.week.slice(-2)} recap`, b?.defeated ? `You beat ${b.name}` : `${b?.name || "The boss"} survived with ${b ? b.hp - b.dealt : 0} HP`,
+    `<div><b class="disp">${r.subs ?? "-"}</b><span>LeetCode submissions</span></div>
+     <div><b class="disp">${mins(r.focus)}</b><span>Focused</span></div>
+     <div><b class="disp">${r.xp}</b><span>XP earned</span></div>
+     <div><b class="disp">${r.quests}</b><span>Quests cleared</span></div>`);
+}
 
 /* ---------------- XP toasts ---------------- */
 
@@ -554,7 +806,11 @@ function celebrate() {
   }
   const fresh = g.recent.filter((a) => a.ts > lastTs).reverse();
   fresh.forEach((a) => toastQueue.push({ big: `+${a.xp} XP`, text: a.label }));
-  if (lastLevel !== null && g.level > lastLevel) toastQueue.push({ big: `Level ${g.level}`, text: g.title, level: true });
+  const bossWin = fresh.find((a) => a.key.startsWith("boss:"));
+  const perfect = fresh.find((a) => a.key.startsWith("perfect:day:"));
+  if (lastLevel !== null && g.level > lastLevel) splash("Level up", `Level ${g.level}`, g.title);
+  else if (bossWin) splash("Defeated", bossWin.label.replace(/^Beat /, ""), `+${bossWin.xp} XP, boss down`);
+  else if (perfect) splash("Perfect day", "All quests cleared", `+${perfect.xp} XP bonus`);
   if (newest > lastTs) store.set("xpSeenTs", newest);
   store.set("xpSeenLevel", g.level);
   if (fresh.length) try { navigator.vibrate?.(60); } catch {}
@@ -600,7 +856,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 /* ---------------- start ---------------- */
 
 // Open a page directly with /#today, /#grind or /#quests (handy for bookmarks and screenshots).
-show(Math.max(0, ["#today", "#grind", "#quests"].indexOf(location.hash)));
+show(Math.max(0, ["#today", "#plan", "#grind", "#arena", "#quests", "#exams"].indexOf(location.hash)));
 tick();
 load();
 keepAwake();
