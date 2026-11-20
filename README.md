@@ -6,7 +6,8 @@ Turn an old Android phone into an always-on study and grind dashboard for your d
 
 ![The Today page: clock, weather, upcoming exams, class schedule and focus timer](docs/today.png)
 
-- **Today:** clock, date, weather, countdowns, a focus timer that logs your minutes, and your class schedule. Once today's last class ends, the schedule switches to the next day that has classes.
+- **Today:** clock, date, weather, countdowns, a focus timer that logs your minutes, and your class schedule. Once today's last class ends, the schedule switches to the next day that has classes. During an exam week the classes disappear and the panel shows the exam timetable instead.
+- **Focus mode:** tap 25 or 50 min and the whole screen becomes a giant timer with a progress bar, Pause, +5 min and Stop. When it ends the phone vibrates and chimes, logs the minutes, and offers a 5 minute break. Stopping early still logs what you did if it was 5 minutes or more.
 - **Grind:** your LeetCode streak with a live countdown to when it breaks (05:30 IST), your POTD chain (days in a row you solved the problem of the day, with the last 14 days as pips), problems solved split into Easy, Medium and Hard, the daily problem as a quest, tiny next targets (the next 10 LeetCode solves, the next 25 Codeforces rating), today's submissions against yesterday's, and a countdown to the next contest.
 - **Quests:** daily, weekly and monthly goals that earn XP. XP fills levels, perfect days build a streak, and badges unlock along the way. Quests sit on the right, with your level, perfect-day streak and badges on the left. A toast in the top bar shows each XP gain.
 
@@ -137,6 +138,12 @@ Claude runs on your laptop, so it can only reach the phone if both are on the **
 
 When you want Claude to add something, give it the phone's IP address and the PIN printed in Termux. Claude then sends the item to `/api/events` on the phone.
 
+### Exam weeks and holidays
+
+On the laptop editor, under **No-class periods**, add a name and a date range (for example *End-sem exams*, 25 Nov to 2 Dec). On those days your timetable is hidden. Add the exams themselves as usual; while the period is on, the Schedule panel lists every remaining exam with its day, time and countdown. From the evening before the period starts, it already shows the exam timetable.
+
+Over the API: `POST /api/breaks` with `{"label": "End-sem exams", "from": "2026-11-25", "to": "2026-12-02"}` (same `X-Pin` header as events), and `DELETE /api/breaks/<id>`. They're stored in `data/breaks.json`.
+
 ## 8. Start automatically after a reboot (optional, needs Termux:Boot)
 
 In Termux:
@@ -200,7 +207,7 @@ The last line turns your old settings (timetable, calendar links) into your pers
 
 ## Where your data lives
 
-The `data/` folder holds `events.json` (exams and tests), `goals.json` (your goals), `counters.json` (+1 counts), `xp.json` (XP, streak and milestones), `potd.json` (which days you solved the POTD), `focus.json` (focus minutes per day), `config.json` (your own settings, if any) and `pin.txt`. To back it up, copy the folder somewhere. Delete `pin.txt` to get a new PIN.
+The `data/` folder holds `events.json` (exams and tests), `goals.json` (your goals), `counters.json` (+1 counts), `xp.json` (XP, streak and milestones), `potd.json` (which days you solved the POTD), `breaks.json` (no-class periods), `focus.json` (focus minutes per day), `config.json` (your own settings, if any) and `pin.txt`. To back it up, copy the folder somewhere. Delete `pin.txt` to get a new PIN.
 
 ## Notes
 
