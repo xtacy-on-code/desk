@@ -303,8 +303,37 @@ h2 .val small { font-size: 14px; color: var(--t3); }
 .quests li.met .pips i.on, .quests li.met .bar i { background: var(--easy); }
 .quests li.met .q-val b, .quests li.met .q-xp { color: var(--easy); }
 
+/* ---------- exam week: Schedule panel lists the exams ---------- */
+.sched.exams li { grid-template-columns: 56px 1fr auto; padding-top: 2px; padding-bottom: 2px; }
+.sched.exams li .t { color: var(--ink); }
+.sched.exams li.now .t, .sched.exams li.now .main { color: var(--red); font-weight: 500; }
+.sched.exams li.now::before { background: var(--red); }
+
+/* ---------- focus mode: the whole screen is the timer ---------- */
+.fscreen {
+  position: fixed; inset: 0; z-index: 10;
+  display: grid; grid-template-rows: auto 1fr auto auto auto; row-gap: 12px;
+  padding: max(12px, env(safe-area-inset-top)) max(32px, env(safe-area-inset-right))
+           max(16px, env(safe-area-inset-bottom)) max(32px, env(safe-area-inset-left));
+  background: var(--paper);
+}
+.fs-top { display: flex; align-items: center; gap: 16px; }
+.fs-top .tag { position: static; font-size: 20px; padding: 4px 12px; }
+.fs-ends { margin-left: auto; font-size: 15px; font-weight: 500; color: var(--t2); }
+.fs-top .btn { min-height: 40px; }
+.fs-time {
+  align-self: center; justify-self: center;
+  font-size: 176px; line-height: 0.85; color: var(--ink); letter-spacing: 0.02em;
+  text-shadow: 6px 6px 0 var(--track);
+}
+.fs-time span { color: var(--red); }
+.fs-bar { height: 16px; border: 2px solid var(--ink); border-radius: 4px; background: var(--card); overflow: hidden; box-shadow: 3px 3px 0 var(--ink); }
+.fs-bar i { display: block; height: 100%; background: var(--ink); transform-origin: left; transform: scaleX(0); transition: transform 1s linear; }
+.fs-meta { font-size: 14px; color: var(--t2); text-align: center; }
+.fs-actions { display: flex; justify-content: center; gap: 12px; }
+
 /* ---------- night ---------- */
-.night { position: fixed; inset: 0; background: #0d0b09; display: grid; place-items: center; }
+.night { position: fixed; inset: 0; z-index: 20; background: #0d0b09; display: grid; place-items: center; }
 .night-clock { font-size: 120px; color: #2b2620; letter-spacing: 0.02em; }
 
 /* ---------- portrait fallback ---------- */
@@ -318,7 +347,7 @@ h2 .val small { font-size: 14px; color: var(--t3); }
 
 @media (prefers-reduced-motion: reduce) {
   .page { transform: none !important; transition: opacity 160ms ease; }
-  .tab-ind, .bar i { transition: none; }
+  .tab-ind, .bar i, .fs-bar i { transition: none; }
   .toast, .toast.show { transform: none; }
   .btn:active, .tab:active, .fs-btn:active { transform: none; }
 }

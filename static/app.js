@@ -120,34 +120,88 @@ setInterval(() => {
   $("nightClock").style.transform = `translate(${r() * 6}px, ${r() * 4}px)`;
 }, 5 * 60_000);
 
-/* ---------------- focus timer ---------------- */
+/* ---------------- focus mode ---------------- */
 
+// A running session lives in localStorage so it survives a reload:
+// {kind: "focus" | "break", minutes, endAt, pausedLeft?, hidden?}
 const focus = {
   get: () => { try { return JSON.parse(localStorage.getItem("focus") || "null"); } catch { return null; } },
   set: (v) => { try { v ? localStorage.setItem("focus", JSON.stringify(v)) : localStorage.removeItem("focus"); } catch {} },
   running() { const f = this.get(); return !!(f && !f.pausedLeft); },
 };
+let focusDone = null;   // {kind, minutes}: what the full screen shows after a session ends
+let audio = null;       // created on a tap, since browsers only allow sound after one
 
-function startFocus(minutes) {
-  focus.set({ minutes, endAt: Date.now() + minutes * 60_000 });
+const leftMs = (f) => f.pausedLeft ?? f.endAt - Date.now();
+
+function chime() {
+  try {
+    const t = audio.currentTime;
+    [0, 0.25, 0.5].forEach((d, i) => {
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.frequency.value = i === 2 ? 1046 : 784;
+      g.gain.setValueAtTime(0.0001, t + d);
+      g.gain.exponentialRampToValueAtTime(0.3, t + d + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.22);
+      o.connect(g).connect(audio.destination);
+      o.start(t + d); o.stop(t + d + 0.25);
+    });
+  } catch {}
+}
+
+function startFocus(minutes, kind = "focus") {
+  try { audio = audio || new AudioContext(); audio.resume(); } catch {}
+  focusDone = null;
+  focus.set({ kind, minutes, endAt: Date.now() + minutes * 60_000 });
   renderFocus(true);
 }
 
 function pauseFocus() {
   const f = focus.get();
   if (!f) return;
-  if (f.pausedLeft) focus.set({ minutes: f.minutes, endAt: Date.now() + f.pausedLeft });
-  else focus.set({ minutes: f.minutes, endAt: f.endAt, pausedLeft: f.endAt - Date.now() });
-  renderFocus(true);
+  if (f.pausedLeft) { f.endAt = Date.now() + f.pausedLeft; delete f.pausedLeft; }
+  else f.pausedLeft = f.endAt - Date.now();
+  focus.set(f); renderFocus(true);
 }
 
-function stopFocus() { focus.set(null); renderFocus(true); }
+function addFive() {
+  const f = focus.get();
+  if (!f) return;
+  f.minutes += 5;
+  if (f.pausedLeft) f.pausedLeft += 300_000; else f.endAt += 300_000;
+  focus.set(f); renderFocus(true);
+}
 
-async function finishFocus(minutes) {
+function setHidden(hidden) {
+  const f = focus.get();
+  if (!f) return;
+  f.hidden = hidden; focus.set(f); renderFocus(true);
+}
+
+// Stopping early still counts the minutes you actually did, if it was at least 5.
+async function stopFocus() {
+  const f = focus.get();
   focus.set(null);
-  try { navigator.vibrate?.([200, 100, 200]); } catch {}
-  await api("POST", "/api/focus", { minutes });
-  load();
+  renderFocus(true);
+  if (f && f.kind !== "break") {
+    const done = Math.floor((f.minutes * 60_000 - Math.max(0, leftMs(f))) / 60_000);
+    if (done >= 5) { try { await api("POST", "/api/focus", { minutes: done }); } catch {} load(); }
+  }
+}
+
+async function finishFocus(f) {
+  focus.set(null);
+  focusDone = { kind: f.kind || "focus", minutes: f.minutes };
+  try { navigator.vibrate?.([200, 100, 200, 100, 400]); } catch {}
+  chime();
+  renderFocus(true);
+  if (focusDone.kind !== "break") { try { await api("POST", "/api/focus", { minutes: f.minutes }); } catch {} load(); }
+}
+
+const smallClock = (s) => `${pad(Math.floor(s / 60))}:${pad(s % 60)}`;
+function bigClock(s) {
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = pad(s % 60);
+  return `${h ? `${h}:${pad(m)}` : pad(m)}<span>:${sec}</span>`;
 }
 
 let lastFocusKey = "";
@@ -158,33 +212,65 @@ function renderFocus(force) {
   let left = presets[0] * 60_000, total = left;
   if (f) {
     total = f.minutes * 60_000;
-    left = f.pausedLeft ?? f.endAt - Date.now();
-    if (left <= 0) { finishFocus(f.minutes); left = 0; }
+    left = leftMs(f);
+    if (left <= 0) { finishFocus(f); return; }
   }
   const s = Math.ceil(left / 1000);
-  $("focusTime").textContent = `${pad(Math.floor(s / 60))}:${pad(s % 60)}`;
+  $("focusTime").textContent = smallClock(s);
   $("ringFg").style.strokeDashoffset = f ? String(C * (left / total)) : String(C);
 
-  const key = f ? (f.pausedLeft ? "paused" : "running") : "idle:" + presets.join(",");
-  if (key !== lastFocusKey || force) {
-    lastFocusKey = key;
-    const a = $("focusActions");
-    if (!f) {
-      a.innerHTML = presets.map((m) => `<button class="btn" data-start="${m}">${m} min</button>`).join("");
-    } else {
-      a.innerHTML = `<button class="btn ink" data-act="pause">${f.pausedLeft ? "Resume" : "Pause"}</button>
-                     <button class="btn" data-act="stop">Stop</button>`;
-    }
+  const full = (f && !f.hidden) || !!focusDone;
+  $("fscreen").hidden = !full;
+  if (f && full) {
+    $("fsTime").innerHTML = bigClock(s);
+    $("fsBar").style.transform = `scaleX(${1 - left / total})`;
+    $("fsEnds").textContent = f.pausedLeft ? "Paused" : `Ends at ${hm(new Date(f.endAt))}`;
+    $("fsMeta").textContent = f.kind === "break"
+      ? "Stand up, drink some water, look at something far away"
+      : `${f.minutes} min session · focus today ${mins(state?.focus?.today || 0)}`;
+  }
+
+  const key = (f ? `${f.kind}:${f.pausedLeft ? "p" : "r"}:${f.hidden ? "h" : "v"}` : focusDone ? `done:${focusDone.kind}` : "idle") + presets.join(",");
+  if (key === lastFocusKey && !force) return;
+  lastFocusKey = key;
+
+  $("focusActions").innerHTML = f
+    ? `<button class="btn ink" data-act="open">Full screen</button><button class="btn" data-act="stop">Stop</button>`
+    : presets.map((m) => `<button class="btn" data-start="${m}">${m} min</button>`).join("");
+
+  if (f) {
+    $("fsTag").textContent = f.kind === "break" ? "Break" : "Focus";
+    $("fsTag").classList.toggle("safe", f.kind === "break");
+    $("fsHide").hidden = false;
+    $("fsActions").innerHTML = `<button class="btn ink" data-act="pause">${f.pausedLeft ? "Resume" : "Pause"}</button>
+      <button class="btn" data-act="plus">+5 min</button><button class="btn" data-act="stop">Stop</button>`;
+  } else if (focusDone) {
+    const brk = focusDone.kind === "break";
+    $("fsTag").textContent = brk ? "Break over" : "Done";
+    $("fsTag").classList.toggle("safe", !brk);
+    $("fsHide").hidden = true;
+    $("fsTime").innerHTML = brk ? "Back to it" : `+${focusDone.minutes} min`;
+    $("fsBar").style.transform = "scaleX(1)";
+    $("fsEnds").textContent = "";
+    $("fsMeta").textContent = brk ? "Pick your next session" : `Logged · focus today ${mins(state?.focus?.today || 0)}`;
+    $("fsActions").innerHTML = brk
+      ? presets.map((m) => `<button class="btn ink" data-start="${m}">${m} min</button>`).join("") + `<button class="btn" data-act="close">Close</button>`
+      : `<button class="btn ink" data-break="5">5 min break</button><button class="btn" data-start="${focusDone.minutes}">Another ${focusDone.minutes}</button><button class="btn" data-act="close">Close</button>`;
   }
 }
 
-$("focusActions").addEventListener("click", (e) => {
+function onFocusClick(e) {
   const b = e.target.closest("button");
   if (!b) return;
+  lastTouch = Date.now();
   if (b.dataset.start) startFocus(+b.dataset.start);
-  else if (b.dataset.act === "pause") pauseFocus();
-  else if (b.dataset.act === "stop") stopFocus();
-});
+  else if (b.dataset.break) startFocus(+b.dataset.break, "break");
+  else ({ pause: pauseFocus, stop: stopFocus, plus: addFive, open: () => setHidden(false),
+          close: () => { focusDone = null; renderFocus(true); } })[b.dataset.act]?.();
+}
+$("focusActions").addEventListener("click", onFocusClick);
+$("fsActions").addEventListener("click", onFocusClick);
+$("fsHide").addEventListener("click", () => setHidden(true));
 
 /* ---------------- data ---------------- */
 
@@ -251,7 +337,7 @@ function renderToday() {
     : `Set <code class="num">"city"</code> in config.json for weather`;
 
   const today = new Date().setHours(0, 0, 0, 0);
-  const up = state.upcoming.slice(0, 4);
+  const up = state.upcoming.slice(0, 3);
   const more = state.upcoming.length - up.length;
   $("upcomingMore").textContent = more > 0 ? `+${more} more` : "";
   $("upcoming").innerHTML = up.length ? up.map((u) => {
@@ -267,6 +353,8 @@ function renderToday() {
 
   const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
   const sch = state.schedule;
+  if (sch.mode === "exams") return renderExams(sch, nowMin);
+  $("schedule").classList.remove("exams");
   $("schedLabel").textContent = sch.isToday ? "Schedule" : `Schedule · ${sch.label}`;
   $("schedule").innerHTML = sch.items.length ? sch.items.map((s) => {
     const st = toMin(s.start), en = s.end ? toMin(s.end) : st + 60;
@@ -276,6 +364,26 @@ function renderToday() {
             <span class="main">${kind}${esc(s.title)}</span><span class="side">${esc(s.where)}</span></li>`;
   }).join("") : `<li class="empty">Nothing scheduled this week. Add classes to <code>"timetable"</code> in config.json.</li>`;
 
+  const f = state.focus;
+  $("focusTotal").textContent = `Focus ${mins(f.today)} today · ${mins(f.week)} this week`;
+}
+
+// Exam week: no classes, the Schedule panel lists every remaining exam with its day and countdown.
+function renderExams(sch, nowMin) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  $("schedLabel").textContent = sch.label;
+  $("schedule").classList.add("exams");
+  $("schedule").innerHTML = sch.items.map((x) => {
+    const d = new Date(x.date + "T00:00");
+    const days = Math.round((d - today) / 864e5);
+    const day = days === 0 ? "Today" : days === 1 ? "Tmrw" : `${DAYS[d.getDay()].slice(0, 3)} ${d.getDate()}`;
+    const done = days === 0 && x.start && nowMin >= toMin(x.start) + 180;
+    const soon = days === 0 && !done;
+    const kind = x.kind && x.kind !== "Exam" ? `<span class="kind kind-${esc(x.kind.replace(/\s/g, ""))}">${esc(x.kind)}</span>` : "";
+    return `<li class="${done ? "past" : soon ? "now" : ""}"><span class="t">${day}</span>
+      <span class="main">${kind}${esc(x.title)}</span>
+      <span class="side">${[esc(x.start || ""), days > 1 ? `in ${days}d` : ""].filter(Boolean).join(" · ")}</span></li>`;
+  }).join("");
   const f = state.focus;
   $("focusTotal").textContent = `Focus ${mins(f.today)} today · ${mins(f.week)} this week`;
 }
