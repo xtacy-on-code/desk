@@ -52,6 +52,8 @@
     .actions { display: flex; gap: 12px; margin-top: 16px; }
     table.goals input, table.goals select { min-height: 40px; padding: 4px 8px; }
     table.goals .target { width: 88px; }
+    textarea { font: inherit; font-size: 15px; color: var(--ink); background: var(--card); border: 2px solid var(--ink); border-radius: 8px; padding: 8px 12px; width: 100%; resize: vertical; }
+    .field.wide { grid-column: 1 / -1; }
     .pinrow { display: flex; gap: 12px; align-items: end; max-width: 360px; margin-top: 12px; }
     @media (max-width: 640px) {
       table, thead, tbody, tr, td { display: block; } thead { display: none; }
@@ -94,6 +96,57 @@
       <tbody id="evRows"></tbody>
     </table>
 
+  </section>
+
+  <section class="card">
+    <h2>Today's top 3</h2>
+    <p class="sub">Shows on the phone's Plan page; tick them off there.</p>
+    <form id="taskForm">
+      <div class="field wide"><label for="t0">1</label><input id="t0" maxlength="80" autocomplete="off" placeholder="Revise OS deadlocks"></div>
+      <div class="field wide"><label for="t1">2</label><input id="t1" maxlength="80" autocomplete="off"></div>
+      <div class="field wide"><label for="t2">3</label><input id="t2" maxlength="80" autocomplete="off"></div>
+      <div class="field"><button class="primary" type="submit">Save tasks</button></div>
+    </form>
+    <p class="msg" id="taskMsg" role="status"></p>
+  </section>
+
+  <section class="card">
+    <h2>Syllabus</h2>
+    <p class="sub">Topics for each upcoming exam, one per line. Tick them off on the phone's Exams page.</p>
+    <form id="sylForm">
+      <div class="field"><label for="sylSubject">Exam</label><select id="sylSubject"></select></div>
+      <div class="field wide"><label for="sylTopics">Topics</label><textarea id="sylTopics" rows="7" placeholder="Processes and threads&#10;CPU scheduling&#10;Deadlocks"></textarea></div>
+      <div class="field"><button class="primary" type="submit">Save syllabus</button></div>
+    </form>
+    <p class="msg" id="sylMsg" role="status"></p>
+  </section>
+
+  <section class="card">
+    <h2>Mess menu</h2>
+    <p class="sub">The weekly menu. The phone shows today's meals on the Plan page and marks the next one.</p>
+    <form id="messForm">
+      <div class="field"><label for="messDay">Day</label><select id="messDay"></select></div>
+      <div class="field wide"><label for="mBreakfast">Breakfast</label><input id="mBreakfast" autocomplete="off"></div>
+      <div class="field wide"><label for="mLunch">Lunch</label><input id="mLunch" autocomplete="off"></div>
+      <div class="field wide"><label for="mSnacks">Snacks</label><input id="mSnacks" autocomplete="off"></div>
+      <div class="field wide"><label for="mDinner">Dinner</label><input id="mDinner" autocomplete="off"></div>
+      <div class="field"><button class="primary" type="submit">Save day</button></div>
+    </form>
+    <p class="msg" id="messMsg" role="status"></p>
+  </section>
+
+  <section class="card">
+    <h2>Phone settings</h2>
+    <p class="sub">Saved on the phone in data/config.json, so updates never reset them.</p>
+    <form id="setForm">
+      <div class="field"><label for="sNightStart">Night mode from</label><input id="sNightStart" type="time"></div>
+      <div class="field"><label for="sNightEnd">Night mode until</label><input id="sNightEnd" type="time"></div>
+      <div class="field"><label for="sRemind">Streak reminder at</label><input id="sRemind" type="time"></div>
+      <div class="field"><label for="sPet">Pet's name</label><input id="sPet" maxlength="20" autocomplete="off"></div>
+      <div class="field"><label for="sBoss">Boss HP (XP a week)</label><input id="sBoss" type="number" min="50" max="5000" step="10"></div>
+      <div class="field"><button class="primary" type="submit">Save settings</button></div>
+    </form>
+    <p class="msg" id="setMsg" role="status"></p>
   </section>
 
   <section class="card">
@@ -264,8 +317,80 @@ $("saveGoals").addEventListener("click", async () => {
   }
 });
 
+
+/* ---------- top 3, syllabus, mess menu, settings ---------- */
+let current = {};
+const say = (id, text, err) => { $(id).textContent = text; $(id).className = err ? "msg err" : "msg"; };
+const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+$("messDay").innerHTML = DAY_KEYS.map((k, i) => `<option value="${k}">${DAY_NAMES[i]}</option>`).join("");
+$("messDay").value = DAY_KEYS[(new Date().getDay() + 6) % 7];
+
+$("taskForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const old = Object.fromEntries((current.tasks || []).map((t) => [t.text, t.done]));
+  const tasks = [0, 1, 2].map((i) => $("t" + i).value.trim()).filter(Boolean).map((text) => ({ text, done: !!old[text] }));
+  try { await api("PUT", "/api/tasks", { tasks }); say("taskMsg", "Saved. The phone picks it up within a minute."); }
+  catch (err) { say("taskMsg", err.message, true); }
+});
+
+function fillSyllabus() {
+  const key = ($("sylSubject").value || "").toLowerCase().split(" ").filter(Boolean).join(" ");
+  $("sylTopics").value = ((current.syllabus || {})[key] || []).map((t) => t.topic).join("\n");
+}
+$("sylSubject").addEventListener("change", fillSyllabus);
+$("sylForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const subject = $("sylSubject").value;
+  if (!subject) return say("sylMsg", "Add the exam first, in the section above.", true);
+  const topics = $("sylTopics").value.split("\n").map((t) => t.trim()).filter(Boolean);
+  try { await api("PUT", "/api/syllabus", { subject, topics }); say("sylMsg", `Saved ${topics.length} topics for ${subject}.`); load(); }
+  catch (err) { say("sylMsg", err.message, true); }
+});
+
+function fillMess() {
+  const m = ((current.settings || {}).mess_menu || {})[$("messDay").value] || {};
+  $("mBreakfast").value = m.breakfast || ""; $("mLunch").value = m.lunch || "";
+  $("mSnacks").value = m.snacks || ""; $("mDinner").value = m.dinner || "";
+}
+$("messDay").addEventListener("change", fillMess);
+$("messForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const menu = { ...((current.settings || {}).mess_menu || {}) };
+  menu[$("messDay").value] = { breakfast: $("mBreakfast").value.trim(), lunch: $("mLunch").value.trim(),
+                               snacks: $("mSnacks").value.trim(), dinner: $("mDinner").value.trim() };
+  try { await api("PUT", "/api/settings", { mess_menu: menu }); say("messMsg", `Saved ${DAY_NAMES[DAY_KEYS.indexOf($("messDay").value)]}.`); load(); }
+  catch (err) { say("messMsg", err.message, true); }
+});
+
+$("setForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const body = { night_start: $("sNightStart").value, night_end: $("sNightEnd").value, reminder_time: $("sRemind").value,
+                 pet_name: $("sPet").value.trim() || "Bit", boss_hp: +$("sBoss").value || 300 };
+  try { await api("PUT", "/api/settings", body); say("setMsg", "Saved. The phone uses them within a minute."); load(); }
+  catch (err) { say("setMsg", err.message, true); }
+});
+
+function fillExtras(st) {
+  current = st;
+  const tasks = st.tasks || [];
+  [0, 1, 2].forEach((i) => { $("t" + i).value = tasks[i]?.text || ""; });
+  const subjects = [...new Set((st.exams || []).map((x) => x.subject))];
+  const keep = $("sylSubject").value;
+  $("sylSubject").innerHTML = subjects.length ? subjects.map((x) => `<option>${esc(x)}</option>`).join("") : `<option value="">No exams in the next two weeks</option>`;
+  if (subjects.includes(keep)) $("sylSubject").value = keep;
+  fillSyllabus();
+  fillMess();
+  const set = st.settings || {};
+  $("sNightStart").value = set.night_start || "00:30"; $("sNightEnd").value = set.night_end || "07:00";
+  $("sRemind").value = set.reminder_time || "22:00"; $("sPet").value = set.pet_name || "Bit";
+  $("sBoss").value = set.boss_hp || 300;
+}
+
 async function load() {
-  const { events, progress, breaks } = await (await fetch("/api/state")).json();
+  const st = await (await fetch("/api/state")).json();
+  const { events, progress, breaks } = st;
+  fillExtras(st);
   $("brRows").innerHTML = (breaks || []).length ? breaks.map((b) => `
     <tr data-id="${esc(b.id)}">
       <td>${esc(b.label)}</td>
