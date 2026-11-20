@@ -9,12 +9,17 @@ Turn an old Android phone into an always-on study and grind dashboard for your d
 - **Today:** clock, date, weather, countdowns, a focus timer that logs your minutes, and your class schedule. Once today's last class ends, the schedule switches to the next day that has classes. During an exam week the classes disappear and the panel shows the exam timetable instead.
 - **Focus mode:** tap 25 or 50 min and the whole screen becomes a giant timer with a progress bar, Pause, +5 min and Stop. When it ends the phone vibrates and chimes, logs the minutes, and offers a 5 minute break. Stopping early still logs what you did if it was 5 minutes or more.
 - **Grind:** your LeetCode streak with a live countdown to when it breaks (05:30 IST), your POTD chain (days in a row you solved the problem of the day, with the last 14 days as pips), problems solved split into Easy, Medium and Hard, the daily problem as a quest, tiny next targets (the next 10 LeetCode solves, the next 25 Codeforces rating), today's submissions against yesterday's, and a countdown to the next contest.
+- **Plan:** today's top 3 tasks (set from the laptop, ticked on the phone) and today's mess menu with the next meal marked.
+- **Arena:** your desk pet, which hatches and grows with your level (Egg, Hatchling, Kid, Hero with a cape, Legend with a crown), looks worried when your streak is at risk and sleeps at night; a weekly comic boss whose HP drops as you earn XP (beat it by Sunday for +100 XP); and your Codeforces rating graph.
+- **Exams:** appears only when an exam is within two weeks. The next exam with a live countdown and its syllabus checklist, plus every upcoming exam with its syllabus progress.
 - **Quests:** daily, weekly and monthly goals that earn XP. XP fills levels, perfect days build a streak, and badges unlock along the way. Quests sit on the right, with your level, perfect-day streak and badges on the left. A toast in the top bar shows each XP gain.
 
 **Extras:**
 - **Auto-rotate:** pages change every 30 s, and swiping changes them by hand.
 - **Contest alert:** shows in the top bar 90 minutes before a contest starts.
-- **Night mode:** from 00:30 to 07:00 the screen shows only a dim clock. Tap it to wake the dashboard for a minute.
+- **Night mode:** by default from 00:30 to 07:00 the screen shows only a dim clock (change the times in the editor under *Phone settings*). Tap it to wake the dashboard for a minute.
+- **Streak reminder:** at 22:00 (editable), if LeetCode has no submission from you yet that day, the phone gets a notification. Needs Termux:API.
+- **Comic moments:** a burst splash when you level up, beat the boss or clear every daily quest; a Sunday-evening recap of the week; words that pop out of +1 and tick buttons; numbers that roll up when they change; and page dots in the top bar.
 - **Burn-in protection:** the layout shifts a few pixels every 5 minutes.
 - **Battery and heat:** a battery and temperature readout, which turns red at 42°C or above.
 
@@ -207,7 +212,7 @@ The last line turns your old settings (timetable, calendar links) into your pers
 
 ## Where your data lives
 
-The `data/` folder holds `events.json` (exams and tests), `goals.json` (your goals), `counters.json` (+1 counts), `xp.json` (XP, streak and milestones), `potd.json` (which days you solved the POTD), `breaks.json` (no-class periods), `focus.json` (focus minutes per day), `config.json` (your own settings, if any) and `pin.txt`. To back it up, copy the folder somewhere. Delete `pin.txt` to get a new PIN.
+The `data/` folder holds `events.json` (exams and tests), `goals.json` (your goals), `counters.json` (+1 counts), `xp.json` (XP, streak and milestones), `potd.json` (which days you solved the POTD), `breaks.json` (no-class periods), `tasks.json` (top 3 per day), `syllabus.json` (topics per exam), `reminder.json` (last reminder sent), `focus.json` (focus minutes per day), `config.json` (your own settings, if any) and `pin.txt`. To back it up, copy the folder somewhere. Delete `pin.txt` to get a new PIN.
 
 ## Notes
 
