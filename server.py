@@ -5,7 +5,9 @@
 The phone opens http://localhost:8080. Your laptop opens http://<phone-ip>:8080/edit
 to manage exams and goals (needs the PIN printed at startup).
 """
+import csv
 import datetime as dt
+import io
 import json
 import os
 import secrets
@@ -24,7 +26,7 @@ os.makedirs(DATA, exist_ok=True)
 LOCK = threading.Lock()
 XP_LOCK = threading.Lock()
 CACHE = {"leetcode": None, "codeforces": None, "contests": [], "weather": None, "vitals": None,
-         "deadlines": [], "errors": {}}
+         "deadlines": [], "mess": None, "errors": {}}
 
 
 # ---------- small helpers ----------
@@ -255,6 +257,78 @@ def fetch_ical(feeds):
     return sorted(out, key=lambda i: i["ts"])
 
 
+# College mess menus kept in a Google Sheet, like IIT Bhilai's (mess.iitbhilai.ac.in reads the same
+# sheet). Set "mess_sheet" to the sheet id. The sheet has one tab per rotation week, meals as section
+# rows (BREAKFAST, LUNCH, ...) and Monday..Sunday as columns.
+MESS_TABS = ["1&3 Week", "2&4 Week"]
+MESS_ANCHOR = dt.date(2026, 8, 31)   # a Monday on which the first tab was in use
+MESS_ROLLOVER = "22:00"              # after this the site already shows tomorrow's menu
+MESS_MEALS = {"breakfast": ("Breakfast", "08:00", "10:00"), "lunch": ("Lunch", "12:30", "14:30"),
+              "tea time": ("Snacks", "17:00", "18:00"), "snacks": ("Snacks", "17:00", "18:00"),
+              "dinner": ("Dinner", "20:00", "22:00")}
+MESS_SKIP = ("bread", "beverage", "cereal", "fryum", "salad", "roti", "drink")
+WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+def parse_mess_csv(text):
+    """{weekday: [{"name", "from", "to", "items": [str]}]} from one rotation-week tab."""
+    rows = list(csv.reader(io.StringIO(text)))
+    head = next((r for r in rows if sum(1 for c in r if c.strip() in WEEKDAYS) >= 5), None)
+    if not head:
+        raise ValueError("No Monday..Sunday header row in the mess sheet")
+    cols = {i: c.strip() for i, c in enumerate(head) if c.strip() in WEEKDAYS}
+    out = {d: [] for d in WEEKDAYS}
+    meal = None
+    for r in rows[rows.index(head) + 1:]:
+        if not r or not r[0].strip():
+            continue
+        label = " ".join(r[0].split())
+        if not any(r[i].strip() for i in cols) and label.lower() in MESS_MEALS:
+            name, start, end = MESS_MEALS[label.lower()]
+            meal = {d: {"name": name, "from": start, "to": end, "items": [], "extras": []} for d in WEEKDAYS}
+            for d in WEEKDAYS:
+                out[d].append(meal[d])
+            continue
+        if not meal:
+            continue
+        boring = any(k in label.lower() for k in MESS_SKIP)
+        for i, d in cols.items():
+            item = " ".join(r[i].replace("\n", " ").split()) if i < len(r) else ""
+            if item:
+                meal[d]["extras" if boring else "items"].append(item)
+    for d in WEEKDAYS:
+        for m in out[d]:
+            m["items"] = m["items"] or m["extras"]   # a meal that only has tea still shows tea
+            del m["extras"]
+    return out
+
+
+def fetch_mess(sheet_id):
+    weeks = []
+    for tab in MESS_TABS:
+        url = (f"https://docs.google.com/spreadsheets/d/{urllib.parse.quote(sheet_id)}/gviz/tq"
+               f"?tqx=out:csv&sheet={urllib.parse.quote(tab)}")
+        req = urllib.request.Request(url, headers={"User-Agent": "desk-dashboard/1.0"})
+        with urllib.request.urlopen(req, timeout=25) as r:
+            weeks.append(parse_mess_csv(r.read().decode("utf-8", "replace")))
+    return weeks
+
+
+def mess_live(weeks, now):
+    """Today's meals from the fetched sheet, using the site's own week rotation and 22:00 rollover."""
+    day = now.date() + dt.timedelta(days=1) if now.strftime("%H:%M") >= MESS_ROLLOVER else now.date()
+    monday = day - dt.timedelta(days=day.weekday())
+    week = round((monday - MESS_ANCHOR).days / 7) % 2
+    meals = weeks[week].get(WEEKDAYS[day.weekday()], [])
+    if not meals:
+        return None
+    hm = now.strftime("%H:%M") if day == now.date() else "00:00"
+    nxt = next((m["name"] for m in meals if hm < m["to"]), None)
+    return {"day": WEEKDAYS[day.weekday()], "tomorrow": day != now.date(), "next": nxt, "source": "sheet",
+            "meals": [{"name": m["name"], "time": f'{m["from"]}-{m["to"]}', "items": " · ".join(m["items"])}
+                      for m in meals if m["items"]]}
+
+
 def fetch_vitals():
     """Battery info from Termux:API. Returns None anywhere else (e.g. on the laptop)."""
     try:
@@ -267,14 +341,15 @@ def fetch_vitals():
 
 
 def refresh_loop():
-    next_run = {"lc": 0, "cf": 0, "cu": 0, "wx": 0, "vt": 0, "ic": 0}
+    next_run = {"lc": 0, "cf": 0, "cu": 0, "wx": 0, "vt": 0, "ic": 0, "ms": 0}
     lc_contests = []
     while True:
         cfg = config()
         now = time.time()
         every = {"lc": cfg.get("leetcode_refresh_min", 10) * 60, "cf": 3600, "cu": 30 * 60,
-                 "wx": 20 * 60, "vt": 60, "ic": 30 * 60}
-        needs = {"wx": cfg.get("city"), "ic": cfg.get("ical_feeds"), "cu": cfg.get("codeforces_handle")}
+                 "wx": 20 * 60, "vt": 60, "ic": 30 * 60, "ms": 3 * 3600}
+        needs = {"wx": cfg.get("city"), "ic": cfg.get("ical_feeds"), "cu": cfg.get("codeforces_handle"),
+                 "ms": cfg.get("mess_sheet")}
         jobs = [j for j in next_run if now >= next_run[j] and needs.get(j, True)]
         if not cfg.get("ical_feeds"):
             CACHE["deadlines"] = []
@@ -289,6 +364,10 @@ def refresh_loop():
                     cf = fetch_codeforces()
                     with LOCK:
                         CACHE["cf"] = cf
+                elif job == "ms":
+                    weeks = fetch_mess(cfg["mess_sheet"])
+                    with LOCK:
+                        CACHE["mess"] = weeks
                 elif job == "cu":
                     cu = fetch_codeforces_user(cfg["codeforces_handle"])
                     with LOCK:
@@ -754,7 +833,7 @@ def sync_goals(today, lc, cu, counters, focus):
 
 # ---------- plan, exams, boss, recap, reminders ----------
 
-SETTING_KEYS = {"night_start", "night_end", "reminder_time", "mess_menu", "pet_name", "boss_hp"}
+SETTING_KEYS = {"night_start", "night_end", "reminder_time", "mess_menu", "mess_sheet", "pet_name", "boss_hp"}
 MEALS = [("Breakfast", "10:30"), ("Lunch", "15:00"), ("Snacks", "18:30"), ("Dinner", "23:59")]
 BOSSES = ["Captain TLE", "Doctor Wrong Answer", "Segfault Sam", "The Off-By-One", "Lord Procrastination",
           "Memory Limit Mike", "The Infinite Loop", "Null Pointer Nell"]
@@ -779,9 +858,9 @@ def mess_today(cfg, now):
     if not menu:
         return None
     hm = now.strftime("%H:%M")
-    meals = [{"name": n, "items": menu.get(n.lower(), ""), "until": until} for n, until in MEALS if menu.get(n.lower())]
+    meals = [{"name": n, "items": menu.get(n.lower(), ""), "until": until, "time": ""} for n, until in MEALS if menu.get(n.lower())]
     nxt = next((m["name"] for m in meals if hm < m["until"]), None)
-    return {"meals": meals, "next": nxt}
+    return {"meals": meals, "next": nxt, "day": now.strftime("%A"), "tomorrow": False, "source": "typed"}
 
 
 def syllabus_key(subject):
@@ -895,7 +974,10 @@ def build_state():
     state["events"] = sorted(load_json(data_path("events.json"), []), key=lambda e: (e["date"], e.get("time", "")))
     state["breaks"] = sorted(load_json(data_path("breaks.json"), []), key=lambda b: b.get("from", ""))
     state["tasks"] = today_tasks(today)
-    state["mess"] = mess_today(cfg, dt.datetime.now())
+    with LOCK:
+        mess_weeks = CACHE.get("mess")
+    state["mess"] = (mess_live(mess_weeks, dt.datetime.now()) if mess_weeks and cfg.get("mess_sheet") else None) \
+        or mess_today(cfg, dt.datetime.now())
     state["exams"] = exam_board(today, all_events)
     state["syllabus"] = load_json(data_path("syllabus.json"), {})
     state["settings"] = {k: cfg.get(k) for k in SETTING_KEYS}
@@ -1027,6 +1109,10 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"error": "mess_menu must be an object"}, 400)
             if k == "pet_name":
                 v = str(v).strip()[:20]
+            if k == "mess_sheet":
+                v = str(v).strip()[:120]
+                if v and not all(c.isalnum() or c in "-_" for c in v):
+                    return self.send_json({"error": "mess_sheet must be a Google Sheet id"}, 400)
             cur[k] = v
         save_json(path, cur)
         return self.send_json({"ok": True})

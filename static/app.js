@@ -568,8 +568,10 @@ function renderPlan() {
 
   const m = state.mess;
   const day = DAYS[new Date().getDay()];
-  $("mess").innerHTML = m ? `<h2>Mess · ${day}</h2><ul class="meals">${m.meals.map((x) => `
-      <li class="${x.name === m.next ? "next" : ""}"><span class="meal">${x.name}${x.name === m.next ? ` <span class="tag mini">Next</span>` : ""}</span>
+  const t12 = (hhmm) => { const [h, mm] = hhmm.split(":").map(Number); return `${h % 12 || 12}${mm ? ":" + pad(mm) : ""}`; };
+  $("mess").innerHTML = m ? `<h2>Mess · ${esc(m.day)}${m.tomorrow ? " (tomorrow)" : ""}</h2><ul class="meals">${m.meals.map((x) => `
+      <li class="${x.name === m.next ? "next" : ""}"><span class="meal">${x.name}${x.name === m.next ? ` <span class="tag mini">Next</span>` : ""}
+        ${x.time ? `<small>${x.time.split("-").map(t12).join("–")}</small>` : ""}</span>
       <span class="items">${esc(x.items)}</span></li>`).join("")}</ul>`
     : `<h2>Mess · ${day}</h2><p class="empty">No menu yet. Add the weekly menu in the editor (/edit).</p>`;
 }
