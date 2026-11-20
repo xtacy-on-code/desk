@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#1d0f33">
+  <meta name="theme-color" content="#f3eee4">
   <meta name="mobile-web-app-capable" content="yes">
   <title>Desk</title>
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/icon-192.png">
-  <link rel="preload" href="/fonts/Bungee-Regular.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/fonts/Bangers-Regular.ttf" as="font" type="font/ttf" crossorigin>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -67,12 +67,13 @@
       <!-- GRIND -->
       <section class="page grind" aria-label="Grind">
         <div class="col">
-          <div class="gl">
-            <h2 id="streakState">Streak</h2>
+          <div class="gl streak-panel">
+            <span class="tag" id="riskTag" hidden></span>
+            <h2 id="streakState">LeetCode streak</h2>
             <div class="streak-hero">
               <span class="hero disp" id="lcStreak">--</span>
               <div>
-                <div class="unit disp">days</div>
+                <div class="unit">days in a row</div>
                 <div class="timer" id="streakTimer"></div>
               </div>
             </div>

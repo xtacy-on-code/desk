@@ -172,7 +172,7 @@ function renderFocus(force) {
     if (!f) {
       a.innerHTML = presets.map((m) => `<button class="btn" data-start="${m}">${m} min</button>`).join("");
     } else {
-      a.innerHTML = `<button class="btn primary" data-act="pause">${f.pausedLeft ? "Resume" : "Pause"}</button>
+      a.innerHTML = `<button class="btn ink" data-act="pause">${f.pausedLeft ? "Resume" : "Pause"}</button>
                      <button class="btn" data-act="stop">Stop</button>`;
     }
   }
@@ -291,7 +291,8 @@ function pips(filled, n = 10) {
 function hms(sec) {
   const s = Math.max(0, Math.floor(sec));
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-  return h >= 24 ? until(s) : `${pad(h)}:${pad(m)}:${pad(s % 60)}`;
+  if (h >= 24) return `${Math.floor(h / 24)}d ${pad(h % 24)}h`;
+  return `${pad(h)}:${pad(m)}:${pad(s % 60)}`;
 }
 
 /* ---------------- grind ---------------- */
@@ -330,7 +331,7 @@ function renderGrind() {
       <div class="q-title">${esc(dl.title)}</div>
       <div class="q-foot"><span class="${dl.difficulty.toLowerCase()}">${esc(dl.difficulty)}</span>
         <span class="muted">${dl.done ? "Cleared" : "Not cleared"}</span>
-        <a class="btn gold" href="${esc(dl.url)}" target="_blank" rel="noopener">${dl.done ? "Open" : "Solve"}</a></div>`;
+        <a class="btn primary" href="${esc(dl.url)}" target="_blank" rel="noopener">${dl.done ? "Open" : "Solve"}</a></div>`;
   }
 
   const t = g.lcNext;
@@ -365,8 +366,10 @@ function renderTimers() {
   if (g.dayEnds) {
     const left = g.dayEnds - now;
     const risky = !g.safeToday;
-    $("streakState").textContent = risky ? "Streak · at risk" : "Streak · safe today";
-    $("streakState").classList.toggle("danger", risky && left < 6 * 3600);
+    const tag = $("riskTag");
+    tag.hidden = false;
+    tag.textContent = risky ? "At risk" : "Safe today";
+    tag.classList.toggle("safe", !risky);
     $("streakTimer").textContent = risky ? `breaks in ${hms(left)}` : `next day in ${hms(left)}`;
     $("streakTimer").classList.toggle("danger", risky);
   }
@@ -409,7 +412,7 @@ function renderGoals() {
       <span class="q-label"><span class="q-tag">${PERIOD_TAG[x.period]}</span>${esc(x.label)}<span class="q-xp">+${x.xp} XP${manual ? "" : " · auto"}</span></span>
       ${progress}
       <span class="q-val"><b>${x.value ?? "-"}</b> / ${x.target}</span>
-      ${manual ? `<span class="q-btns"><button class="btn ghost" data-goal="${esc(x.id)}" data-delta="-1" aria-label="Take one off ${esc(x.label)}">−</button><button class="btn gold" data-goal="${esc(x.id)}" data-delta="1" aria-label="Add one to ${esc(x.label)}">+1</button></span>` : ""}
+      ${manual ? `<span class="q-btns"><button class="btn ghost" data-goal="${esc(x.id)}" data-delta="-1" aria-label="Take one off ${esc(x.label)}">−</button><button class="btn ink" data-goal="${esc(x.id)}" data-delta="1" aria-label="Add one to ${esc(x.label)}">+1</button></span>` : ""}
     </li>`;
   }).join("") : `<li class="empty">No quests yet. Add some from the editor on your laptop (/edit).</li>`;
 }
