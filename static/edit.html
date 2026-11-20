@@ -3,57 +3,59 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0d0e10">
+  <meta name="theme-color" content="#f3eee4">
   <title>Desk · Editor</title>
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <style>
+    /* Same comic look as the dashboard: cream paper, black ink frames, red only where it matters */
+    @font-face { font-family: "Bangers"; src: url("/fonts/Bangers-Regular.ttf") format("truetype"); font-display: swap; }
+    @font-face { font-family: "Rubik"; src: url("/fonts/Rubik-Variable.ttf") format("truetype"); font-weight: 300 900; font-display: swap; }
     :root {
-      --bg: #0d0e10; --fg: #e8e8eb; --muted: #8d8f96; --faint: #4b4d53; --line: #1e1f23;
-      --accent: #6fcf97; --hard: #e2727b; --med: #e2b155; --easy: #5cc4b2;
-      --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-      --mono: ui-monospace, "Roboto Mono", "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
-      color-scheme: dark;
+      --paper: #f3eee4; --card: #fffdf8; --track: #e8e1d3; --ink: #16130f;
+      --t2: #4f4840; --t3: #6f675d; --hair: rgba(22, 19, 15, 0.1); --red: #e23b2e; --easy: #1f9d6b;
+      --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+      color-scheme: light;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
-    main { max-width: 920px; margin: 0 auto; padding: 32px max(16px, env(safe-area-inset-left)) 64px; }
-    h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
-    .sub { color: var(--muted); font-size: 14px; margin-top: 4px; }
-    h2 { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); margin: 32px 0 10px; }
-    form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px 16px; align-items: end; }
-    .field { display: flex; flex-direction: column; gap: 6px; }
-    .field.wide { grid-column: 1 / -1; }
-    label { font-size: 13px; color: var(--muted); }
+    body { background: var(--paper); color: var(--ink); font: 400 15px/1.5 "Rubik", system-ui, sans-serif; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+    main { max-width: 960px; margin: 0 auto; padding: 32px max(16px, env(safe-area-inset-left)) 64px; }
+    h1 { font: 400 44px/1 "Bangers", "Rubik", sans-serif; letter-spacing: 0.03em; }
+    .sub { color: var(--t2); font-size: 14px; margin-top: 8px; }
+    section.card { background: var(--card); border: 2px solid var(--ink); border-radius: 8px; box-shadow: 4px 4px 0 var(--ink); padding: 20px 24px; margin-top: 24px; }
+    h2 { font-size: 17px; font-weight: 500; margin-bottom: 4px; }
+    h2 + .sub { margin: 0 0 16px; }
+    form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px 16px; align-items: end; margin-top: 16px; }
+    .field { display: flex; flex-direction: column; gap: 8px; }
+    label { font-size: 13px; font-weight: 500; color: var(--t2); }
     input, select {
-      font: inherit; font-size: 16px; color: var(--fg); background: #131417;
-      border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-height: 44px; width: 100%;
+      font: inherit; font-size: 16px; color: var(--ink); background: var(--card);
+      border: 2px solid var(--ink); border-radius: 8px; padding: 8px 12px; min-height: 44px; width: 100%;
     }
-    input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    input:focus-visible, select:focus-visible, button:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
     button {
-      font: inherit; font-size: 14px; color: var(--fg); background: none; cursor: pointer;
-      border: 1px solid var(--line); border-radius: 8px; min-height: 44px; padding: 0 16px;
-      transition: transform 140ms var(--ease-out), border-color 160ms ease;
+      font: 500 14px/1 "Rubik", sans-serif; color: var(--ink); background: var(--card); cursor: pointer;
+      border: 2px solid var(--ink); border-radius: 8px; min-height: 44px; padding: 0 16px;
+      box-shadow: 2px 2px 0 var(--ink);
+      transition: transform 120ms var(--ease-out), box-shadow 120ms var(--ease-out);
     }
-    button:active { transform: scale(0.97); }
-    button.primary { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
-    button.danger { color: var(--hard); }
-    @media (hover: hover) and (pointer: fine) { button:hover { border-color: var(--faint); } }
-    .msg { font-size: 13px; min-height: 20px; margin-top: 8px; color: var(--muted); }
-    .msg.err { color: var(--hard); }
-    table { width: 100%; border-collapse: collapse; font-size: 14px; }
-    th { text-align: left; font-weight: 500; font-size: 12px; color: var(--faint); padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); }
-    td { padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); vertical-align: middle; }
-    td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
-    td select { min-height: 40px; padding: 6px 10px; }
-    .muted { color: var(--muted); }
-    .empty { color: var(--faint); padding: 14px 0; }
-    .actions { display: flex; gap: 10px; margin-top: 14px; }
-    table.goals input, table.goals select { min-height: 40px; padding: 6px 10px; }
-    table.goals .target { width: 90px; }
-    .pinrow { display: flex; gap: 10px; align-items: end; max-width: 360px; }
+    button:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--ink); }
+    button.primary { background: var(--red); color: #fff; }
+    button.danger { color: var(--red); box-shadow: none; border-width: 1px; min-height: 36px; }
+    .msg { font-size: 13px; min-height: 20px; margin-top: 8px; color: var(--t2); }
+    .msg.err { color: var(--red); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 16px; }
+    th { text-align: left; font-weight: 500; font-size: 12px; color: var(--t3); padding: 8px 12px 8px 0; border-bottom: 2px solid var(--ink); }
+    td { padding: 8px 12px 8px 0; border-bottom: 1px solid var(--hair); vertical-align: middle; }
+    td.num { white-space: nowrap; color: var(--t2); }
+    .muted { color: var(--t2); }
+    .empty { color: var(--t3); padding: 12px 0; }
+    .actions { display: flex; gap: 12px; margin-top: 16px; }
+    table.goals input, table.goals select { min-height: 40px; padding: 4px 8px; }
+    table.goals .target { width: 88px; }
+    .pinrow { display: flex; gap: 12px; align-items: end; max-width: 360px; margin-top: 12px; }
     @media (max-width: 640px) {
       table, thead, tbody, tr, td { display: block; } thead { display: none; }
-      tr { border-bottom: 1px solid var(--line); padding: 10px 0; }
+      tr { border-bottom: 1px solid var(--hair); padding: 8px 0; }
       td { border: 0; padding: 4px 0; }
     }
   </style>
@@ -63,7 +65,7 @@
   <h1>Desk editor</h1>
   <p class="sub">Exams and goals for the desk dashboard. Changes show up on the phone within a minute.</p>
 
-  <section id="pinBox">
+  <section id="pinBox" class="card">
     <h2>Unlock</h2>
     <div class="pinrow">
       <div class="field" style="flex:1">
@@ -75,7 +77,8 @@
     <p class="msg" id="pinMsg" role="status"></p>
   </section>
 
-  <section id="editor" hidden>
+  <div id="editor" hidden>
+  <section class="card">
     <h2>Add an exam, test or deadline</h2>
     <form id="addEvent">
       <div class="field"><label for="evKind">Type</label><select id="evKind" name="kind"></select></div>
@@ -91,6 +94,25 @@
       <tbody id="evRows"></tbody>
     </table>
 
+  </section>
+
+  <section class="card">
+    <h2>No-class periods</h2>
+    <p class="sub">Exam weeks or holidays. Classes are hidden on these days, and during an exam week the Schedule panel shows the exam timetable instead.</p>
+    <form id="addBreak">
+      <div class="field"><label for="brLabel">Name</label><input id="brLabel" name="label" autocomplete="off" placeholder="End-sem exams"></div>
+      <div class="field"><label for="brFrom">From</label><input id="brFrom" name="from" type="date" required></div>
+      <div class="field"><label for="brTo">To</label><input id="brTo" name="to" type="date" required></div>
+      <div class="field"><button class="primary" type="submit">Add</button></div>
+    </form>
+    <p class="msg" id="brMsg" role="status"></p>
+    <table>
+      <thead><tr><th>Name</th><th>From</th><th>To</th><th></th></tr></thead>
+      <tbody id="brRows"></tbody>
+    </table>
+  </section>
+
+  <section class="card">
     <h2>Goals</h2>
     <p class="sub">Daily goals reset at midnight, weekly ones on Monday, monthly ones on the 1st.
       Auto goals track themselves; manual ones get +1 buttons on the phone's Quests page.</p>
@@ -104,6 +126,7 @@
     </div>
     <p class="msg" id="goalMsg" role="status"></p>
   </section>
+  </div>
 </main>
 <script>
 "use strict";
@@ -170,6 +193,28 @@ $("evRows").addEventListener("click", async (e) => {
   load();
 });
 
+$("addBreak").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const body = Object.fromEntries(new FormData(e.target));
+  try {
+    await api("POST", "/api/breaks", body);
+    $("brMsg").textContent = "Added " + (body.label || "the period") + ".";
+    $("brMsg").className = "msg";
+    load();
+  } catch (err) {
+    $("brMsg").textContent = err.message;
+    $("brMsg").className = "msg err";
+  }
+});
+
+$("brRows").addEventListener("click", async (e) => {
+  if (!e.target.matches("[data-del]")) return;
+  const tr = e.target.closest("tr");
+  if (!confirm(`Delete ${tr.cells[0].textContent}?`)) return;
+  await api("DELETE", `/api/breaks/${tr.dataset.id}`);
+  load();
+});
+
 const METRIC_NAMES = {
   manual: "Me (+1 on phone)", lc_potd: "LeetCode POTD (auto)", lc_solved: "LeetCode problems (auto)",
   cf_contests: "Codeforces contests (auto)", focus_min: "Focus minutes (auto)",
@@ -220,7 +265,14 @@ $("saveGoals").addEventListener("click", async () => {
 });
 
 async function load() {
-  const { events, progress } = await (await fetch("/api/state")).json();
+  const { events, progress, breaks } = await (await fetch("/api/state")).json();
+  $("brRows").innerHTML = (breaks || []).length ? breaks.map((b) => `
+    <tr data-id="${esc(b.id)}">
+      <td>${esc(b.label)}</td>
+      <td class="num">${fmt(b.from)}</td>
+      <td class="num">${fmt(b.to)}</td>
+      <td><button class="danger" data-del aria-label="Delete ${esc(b.label)}">Delete</button></td>
+    </tr>`).join("") : `<tr><td colspan="4" class="empty">No periods yet.</td></tr>`;
   $("evRows").innerHTML = events.length ? events.map((ev) => `
     <tr data-id="${esc(ev.id)}">
       <td class="muted">${esc(ev.kind)}</td>
