@@ -310,6 +310,12 @@ def refresh_loop():
             except Exception as e:  # keep serving the last good data, retry in 2 min
                 CACHE["errors"][job] = str(e)[:200]
                 next_run[job] = now + 120
+        try:
+            with LOCK:
+                lc_now = CACHE["leetcode"]
+            maybe_remind(cfg, lc_now)
+        except Exception:
+            pass
         with LOCK:
             merged = lc_contests + CACHE.get("cf", [])
             horizon = now + 8 * 86400
@@ -666,6 +672,41 @@ def sync_goals(today, lc, cu, counters, focus):
         cf_max_rating = cu.get("maxRating") if cu else None
         milestone("cf", cf_max_rating, cf_steps(cf_max_rating or 0), MILESTONE_XP["cf"])
 
+        # Weekly boss: its HP is the XP you need to earn this week; beating it is worth a bonus.
+        boss_hp = int(config().get("boss_hp", 300) or 300)
+        week_start_ts = time.mktime(week_start(today).timetuple())
+        boss_key = f"boss:{week_key(today)}"
+        dealt = sum(a["xp"] for k, a in awards.items() if a["ts"] >= week_start_ts and not k.startswith("boss:"))
+        if dealt >= boss_hp and boss_key not in awards:
+            awards[boss_key] = {"xp": 100, "label": f"Beat {boss_name(today)}", "ts": time.time()}
+            changed = True
+        boss = {"name": boss_name(today), "hp": boss_hp, "dealt": min(dealt, boss_hp),
+                "defeated": boss_key in awards, "endsAt": time.mktime((week_start(today) + dt.timedelta(days=7)).timetuple())}
+
+        # Badges earned from how you solve; once earned they stay.
+        earned = store.setdefault("earned", [])
+        def earn(name, cond):
+            nonlocal changed
+            if cond and name not in earned:
+                earned.append(name)
+                changed = True
+        if lc:
+            hours = [dt.datetime.fromtimestamp(r["ts"]).hour for r in lc.get("recent", [])]
+            earn("Night owl", any(0 <= h < 4 for h in hours))
+            earn("Early bird", any(5 <= h < 8 for h in hours))
+            cal = {d for d, n in lc.get("calendar", {}).items() if n}
+            earn("Weekend warrior", any(dt.date.fromisoformat(d).weekday() == 5
+                                        and (dt.date.fromisoformat(d) + dt.timedelta(days=1)).isoformat() in cal
+                                        for d in cal))
+        if cu:
+            months = {}
+            for c in cu.get("contests", []):
+                m = dt.datetime.fromtimestamp(c["ts"]).strftime("%Y-%m")
+                months[m] = months.get(m, 0) + 1
+            earn("Contest regular", any(n >= 3 for n in months.values()))
+        earned_now = list(earned)
+        recap = week_recap(today, lc, awards, focus)
+
         perfect_days = {k.split(":", 2)[2] for k in awards if k.startswith("perfect:day:")}
         day = today if today.isoformat() in perfect_days else today - dt.timedelta(days=1)
         streak = 0
@@ -690,7 +731,7 @@ def sync_goals(today, lc, cu, counters, focus):
         ("First tick", first), ("3-day streak", best >= 3), ("7-day streak", best >= 7),
         ("30-day streak", best >= 30), ("Perfect week", has_perfect_week), ("Level 5", lvl["level"] >= 5),
         ("Level 10", lvl["level"] >= 10), ("Specialist", cf_max >= 1400), ("Expert", cf_max >= 1600),
-    ]
+    ] + [(n, n in earned_now) for n in ("Night owl", "Early bird", "Weekend warrior", "Contest regular")]
 
     milestones = []
     if lc_total is not None:
@@ -707,7 +748,103 @@ def sync_goals(today, lc, cu, counters, focus):
         "xp": total, **lvl, "streak": streak, "bestStreak": best,
         "recent": recent, "badges": [{"name": n, "got": g} for n, g in badges],
         "milestones": milestones, "defs": defs, "metrics": METRICS, "periods": PERIODS,
+        "boss": boss, "recap": recap,
     }
+
+
+# ---------- plan, exams, boss, recap, reminders ----------
+
+SETTING_KEYS = {"night_start", "night_end", "reminder_time", "mess_menu", "pet_name", "boss_hp"}
+MEALS = [("Breakfast", "10:30"), ("Lunch", "15:00"), ("Snacks", "18:30"), ("Dinner", "23:59")]
+BOSSES = ["Captain TLE", "Doctor Wrong Answer", "Segfault Sam", "The Off-By-One", "Lord Procrastination",
+          "Memory Limit Mike", "The Infinite Loop", "Null Pointer Nell"]
+EXAM_KINDS = ("Exam", "Lab exam", "Viva")
+
+
+def valid_hhmm(v):
+    try:
+        dt.datetime.strptime(v, "%H:%M")
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def today_tasks(today):
+    return load_json(data_path("tasks.json"), {}).get(today.isoformat(), [])
+
+
+def mess_today(cfg, now):
+    """Today's meals from the weekly mess_menu, with the next meal marked."""
+    menu = (cfg.get("mess_menu") or {}).get(now.strftime("%a").lower(), {})
+    if not menu:
+        return None
+    hm = now.strftime("%H:%M")
+    meals = [{"name": n, "items": menu.get(n.lower(), ""), "until": until} for n, until in MEALS if menu.get(n.lower())]
+    nxt = next((m["name"] for m in meals if hm < m["until"]), None)
+    return {"meals": meals, "next": nxt}
+
+
+def syllabus_key(subject):
+    return " ".join(str(subject).split()).lower()
+
+
+def exam_board(today, all_events):
+    """Exams in the next 14 days with their syllabus progress, for the Exams page."""
+    syl = load_json(data_path("syllabus.json"), {})
+    horizon = (today + dt.timedelta(days=14)).isoformat()
+    out = []
+    for e in sorted(all_events, key=lambda e: (e.get("date", ""), e.get("time", ""))):
+        if e.get("kind") not in EXAM_KINDS or not (today.isoformat() <= e.get("date", "") <= horizon):
+            continue
+        # A lab exam gets its own syllabus, separate from the theory exam of the same subject.
+        subject = e["title"] if e["kind"] == "Exam" else f'{e["title"]} {e["kind"].lower()}'
+        topics = syl.get(syllabus_key(subject), [])
+        out.append({"title": e["title"], "subject": subject, "kind": e["kind"], "date": e["date"], "time": e.get("time", ""),
+                    "where": e.get("where", ""), "topics": topics,
+                    "done": sum(1 for t in topics if t.get("done")), "total": len(topics)})
+    return out
+
+
+def boss_name(today):
+    y, w, _ = today.isocalendar()
+    return BOSSES[(y * 53 + w) % len(BOSSES)]
+
+
+def week_recap(today, lc, awards, focus):
+    """Numbers for the Sunday recap splash."""
+    ws = week_start(today)
+    days = [(ws + dt.timedelta(days=i)).isoformat() for i in range(7)]
+    start_ts = time.mktime(ws.timetuple())
+    week_awards = [a for k, a in awards.items() if a["ts"] >= start_ts and a["xp"] > 0]
+    return {"week": week_key(today), "isSunday": today.weekday() == 6,
+            "subs": sum((lc or {}).get("calendar", {}).get(d, 0) for d in days) if lc else None,
+            "focus": sum(focus.get(d, 0) for d in days),
+            "xp": sum(a["xp"] for a in week_awards),
+            "quests": sum(1 for k, a in awards.items() if k.startswith("g:") and a["ts"] >= start_ts)}
+
+
+def maybe_remind(cfg, lc):
+    """Once a day after reminder_time, buzz the phone if the LeetCode day has no submission yet."""
+    at = cfg.get("reminder_time", "22:00")
+    if not lc or not valid_hhmm(at) or dt.datetime.now().strftime("%H:%M") < at:
+        return
+    today = dt.date.today().isoformat()
+    path = data_path("reminder.json")
+    sent = load_json(path, {})
+    if sent.get("last") == today:
+        return
+    utc_today = dt.datetime.now(dt.timezone.utc).date().isoformat()
+    if lc.get("calendar", {}).get(utc_today, 0) > 0:
+        return
+    streak = lc.get("streak", 0)
+    try:
+        subprocess.run(["termux-notification", "--id", "desk-streak", "--priority", "high",
+                        "--vibrate", "300,150,300", "--title", f"{streak}-day streak at risk",
+                        "--content", "No LeetCode submission yet today. It resets at 05:30."],
+                       capture_output=True, timeout=10)
+    except Exception:
+        return  # not on the phone (no Termux:API), nothing to do
+    save_json(path, {"last": today})
 
 
 # ---------- state assembled for the dashboard ----------
@@ -757,6 +894,13 @@ def build_state():
     state["upcoming"] = sorted([u for u in upcoming if u["ts"] >= start_of_today], key=lambda u: u["ts"])
     state["events"] = sorted(load_json(data_path("events.json"), []), key=lambda e: (e["date"], e.get("time", "")))
     state["breaks"] = sorted(load_json(data_path("breaks.json"), []), key=lambda b: b.get("from", ""))
+    state["tasks"] = today_tasks(today)
+    state["mess"] = mess_today(cfg, dt.datetime.now())
+    state["exams"] = exam_board(today, all_events)
+    state["syllabus"] = load_json(data_path("syllabus.json"), {})
+    state["settings"] = {k: cfg.get(k) for k in SETTING_KEYS}
+    state["settings"]["night_start"] = cfg.get("night_start")
+    state["pet"] = {"name": cfg.get("pet_name") or "Bit"}
     state["display"] = {k: cfg.get(k) for k in ("rotate_seconds", "night_start", "night_end", "name")}
     state["serverTime"] = time.time()
     return state
@@ -853,7 +997,85 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.events(method, path, body)
             if path.startswith("/api/breaks"):
                 return self.breaks(method, path, body)
+            if path == "/api/settings" and method == "PUT":
+                return self.save_settings(body)
+            if path == "/api/tasks" and method == "PUT":
+                return self.save_tasks(body, today)
+            if path == "/api/tasks/toggle" and method == "POST":
+                return self.toggle_task(body, today)
+            if path == "/api/syllabus" and method == "PUT":
+                return self.save_syllabus(body)
+            if path == "/api/syllabus/toggle" and method == "POST":
+                return self.toggle_topic(body)
         return self.send_json({"error": "Not found"}, 404)
+
+    def save_settings(self, body):
+        """Writes a few phone settings into data/config.json (the private, git-ignored overrides)."""
+        path = data_path("config.json")
+        cur = load_json(path, {})
+        for k, v in body.items():
+            if k not in SETTING_KEYS:
+                return self.send_json({"error": f"Unknown setting '{k}'"}, 400)
+            if k in ("night_start", "night_end", "reminder_time") and not valid_hhmm(v):
+                return self.send_json({"error": f"{k} must be HH:MM"}, 400)
+            if k == "boss_hp":
+                try:
+                    v = max(50, min(5000, int(v)))
+                except (TypeError, ValueError):
+                    return self.send_json({"error": "boss_hp must be a number"}, 400)
+            if k == "mess_menu" and not isinstance(v, dict):
+                return self.send_json({"error": "mess_menu must be an object"}, 400)
+            if k == "pet_name":
+                v = str(v).strip()[:20]
+            cur[k] = v
+        save_json(path, cur)
+        return self.send_json({"ok": True})
+
+    def save_tasks(self, body, today):
+        tasks = body.get("tasks")
+        if not isinstance(tasks, list) or len(tasks) > 3:
+            return self.send_json({"error": "Send up to 3 tasks"}, 400)
+        clean = [{"text": str(t.get("text", "")).strip()[:80], "done": bool(t.get("done"))}
+                 for t in tasks if str(t.get("text", "")).strip()]
+        allt = load_json(data_path("tasks.json"), {})
+        allt[today.isoformat()] = clean
+        cutoff = (today - dt.timedelta(days=60)).isoformat()
+        save_json(data_path("tasks.json"), {d: v for d, v in allt.items() if d >= cutoff})
+        return self.send_json({"tasks": clean})
+
+    def toggle_task(self, body, today):
+        allt = load_json(data_path("tasks.json"), {})
+        tasks = allt.get(today.isoformat(), [])
+        try:
+            t = tasks[int(body.get("index"))]
+        except (TypeError, ValueError, IndexError):
+            return self.send_json({"error": "No such task"}, 404)
+        t["done"] = not t.get("done")
+        save_json(data_path("tasks.json"), allt)
+        return self.send_json({"tasks": tasks})
+
+    def save_syllabus(self, body):
+        subject = syllabus_key(body.get("subject", ""))
+        topics = body.get("topics")
+        if not subject or not isinstance(topics, list):
+            return self.send_json({"error": "Send a subject and a list of topics"}, 400)
+        syl = load_json(data_path("syllabus.json"), {})
+        old = {t["topic"]: t.get("done", False) for t in syl.get(subject, [])}
+        names = [str(t).strip()[:80] for t in topics if str(t).strip()][:40]
+        syl[subject] = [{"topic": n, "done": old.get(n, False)} for n in names]
+        save_json(data_path("syllabus.json"), syl)
+        return self.send_json({"subject": subject, "topics": syl[subject]})
+
+    def toggle_topic(self, body):
+        subject = syllabus_key(body.get("subject", ""))
+        syl = load_json(data_path("syllabus.json"), {})
+        try:
+            t = syl[subject][int(body.get("index"))]
+        except (KeyError, TypeError, ValueError, IndexError):
+            return self.send_json({"error": "No such topic"}, 404)
+        t["done"] = not t.get("done")
+        save_json(data_path("syllabus.json"), syl)
+        return self.send_json({"topics": syl[subject]})
 
     def breaks(self, method, path, body):
         """No-class periods: {"label": "End-sem exams", "from": "YYYY-MM-DD", "to": "YYYY-MM-DD"}."""
