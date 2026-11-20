@@ -1,8 +1,8 @@
-Copyright 2023 The Bungee Project Authors (https://github.com/djrrb/Bungee)
+Copyright 2010 The Bangers Project Authors (https://github.com/googlefonts/bangers)
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
-https://openfontlicense.org
+https://scripts.sil.org/OFL
 
 
 -----------------------------------------------------------
