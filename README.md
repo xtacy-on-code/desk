@@ -205,7 +205,7 @@ The `data/` folder holds `events.json` (exams and tests), `goals.json` (your goa
 ## Notes
 
 - The **POTD chain** starts from `potd_streak_seed` and then counts from the server's own log, because LeetCode's public data only covers your last 20 accepted submissions. Without a seed it shows something like `8+`. Keep the server running daily (or at least every few days) so no solved day gets missed.
-- The look is "Comic panel": cream paper, black ink frames with hard purple shadows, red for the big moments (the streak, "At risk"), in the **Bangers** (big figures) and **Rubik** (text) fonts. Both are bundled in `static/fonts/` under the SIL Open Font License (see the `OFL-*.txt` files), so it works offline. It was redesigned with [unslop](https://github.com/heydamir/unslop) by Damir Sokolovsky (CC BY 4.0).
+- The look is "Comic panel": cream paper, black ink frames with hard shadows, red for the big moments (the streak, "At risk"), in the **Bangers** (big figures) and **Rubik** (text) fonts. Both are bundled in `static/fonts/` under the SIL Open Font License (see the `OFL-*.txt` files), so it works offline. It was redesigned with [unslop](https://github.com/heydamir/unslop) by Damir Sokolovsky (CC BY 4.0).
 - **"Solved today"** on the daily problem is based on LeetCode's reset time (00:00 UTC, which is 05:30 IST).
 - LeetCode's data comes from the same unofficial GraphQL endpoint the LeetCode website uses. If LeetCode changes it, the Grind page shows a "LeetCode failed" status in the top bar until it's fixed.
 - To run it on the laptop for testing: run `python server.py`, then open http://localhost:8080. Add `#grind`, `#today` or `#quests` to the address to open a page directly.

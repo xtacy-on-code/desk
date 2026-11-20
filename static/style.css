@@ -2,12 +2,13 @@
    Direction
    - Product:   an always-on desk dashboard that keeps one CS student's daily grind, classes and exams in view
    - Character: loud, punchy, a little cheeky
-   - World:     a comic book page: cream newsprint, black ink, two spot inks (red and purple)
+   - World:     a comic book page: cream newsprint, black ink, black ink and one spot red
    - Moments:   the giant comic-lettered streak on Grind, the clock on Today, the level badge on Quests,
                 and the Easy/Medium/Hard split, where each colour means a difficulty
    - Signature: caption tags like "At risk", in black-bordered boxes with a hard offset shadow
-   Red is for the big moments only (streak, at-risk, Solve). Purple is the second ink: panel shadows,
-   the active tab, the POTD chain, XP and the +1 buttons. Everything else is ink on paper. */
+   Red is for the big moments only (streak, at-risk, Solve, exams). Everything else is black ink on paper,
+   with green for "done" and the Easy/Medium/Hard split as the only other colours. (Purple was tried
+   on the shadows and rejected.) */
 @font-face { font-family: "Bangers"; src: url("/fonts/Bangers-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
 @font-face { font-family: "Rubik"; src: url("/fonts/Rubik-Variable.ttf") format("truetype"); font-weight: 300 900; font-display: swap; }
 
@@ -20,8 +21,6 @@
   --t3: #6f675d;
   --hair: rgba(22, 19, 15, 0.1);
   --red: #e23b2e;
-  --purple: #6b3fd4;
-  --purple-soft: #e7defa;
   --easy: #1f9d6b;
   --med: #b8800f;
   --med-fill: #e9a92a;
@@ -60,7 +59,7 @@ ul { list-style: none; }
   background: var(--card);
   border: 2px solid var(--ink);
   border-radius: 8px;
-  box-shadow: 4px 4px 0 var(--purple);
+  box-shadow: 4px 4px 0 var(--ink);
   padding: 12px 16px;
   min-height: 0;
   display: flex; flex-direction: column;
@@ -106,7 +105,7 @@ h2 .val small { font-size: 14px; color: var(--t3); }
 }
 .btn:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--ink); }
 .btn.primary { background: var(--red); color: #fff; }
-.btn.ink { background: var(--purple); color: #fff; }
+.btn.ink { background: var(--ink); color: #fff; }
 .btn.ghost { color: var(--t2); }
 
 .app {
@@ -133,20 +132,20 @@ h2 .val small { font-size: 14px; color: var(--t3); }
 .tab:active { transform: scale(0.97); }
 .tab-ind {
   position: absolute; left: 4px; top: 4px; width: 84px; height: 28px; border-radius: 6px;
-  background: var(--purple); transition: transform 240ms var(--ease-out);
+  background: var(--ink); transition: transform 240ms var(--ease-out);
 }
 .alert { font-size: 13px; font-weight: 500; color: var(--red); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .toast {
   position: absolute; left: 50%; top: 50%; translate: -50% -50%;
   display: flex; align-items: center; gap: 8px; white-space: nowrap; pointer-events: none;
   padding: 4px 12px; border: 2px solid var(--ink); border-radius: 6px;
-  background: var(--card); box-shadow: 3px 3px 0 var(--purple);
+  background: var(--card); box-shadow: 3px 3px 0 var(--ink);
   font-size: 13px; color: var(--ink);
   opacity: 0; transform: translateY(6px);
   transition: opacity 160ms ease, transform 160ms var(--ease-out);
 }
 .toast.show { opacity: 1; transform: none; transition-duration: 300ms; }
-.toast b { font: 400 20px/1 var(--comic); letter-spacing: 0.04em; color: var(--purple); }
+.toast b { font: 400 20px/1 var(--comic); letter-spacing: 0.04em; color: var(--ink); }
 .status { margin-left: auto; display: flex; align-items: center; gap: 16px; font-size: 13px; color: var(--t2); }
 #topClock { font: 500 14px var(--body); color: var(--ink); }
 .sync { display: flex; align-items: center; gap: 8px; }
@@ -190,14 +189,14 @@ h2 .val small { font-size: 14px; color: var(--t3); }
 .rows li.urgent .t { color: var(--red); }
 .kind { font-size: 12px; font-weight: 500; color: var(--t2); margin-right: 8px; }
 .kind-Exam, .kind-Labexam, .kind-Viva { color: var(--red); }
-.kind-Test, .kind-Quiz, .kind-Due, .kind-OA { color: var(--purple); }
+.kind-Test, .kind-Quiz, .kind-Due, .kind-OA { color: var(--ink); }
 .rows li.empty { display: block; }
 .empty { font-size: 13px; color: var(--t3); padding: 4px 0; line-height: 1.5; }
 .empty code { font-size: 12px; color: var(--t2); }
 .sk { display: block; height: 12px; border-radius: 2px; background: var(--track); margin: 8px 0; }
 
 /* ---------- today ---------- */
-.clock { font-size: 84px; line-height: 0.9; color: var(--ink); letter-spacing: 0.02em; text-shadow: 4px 4px 0 var(--purple); }
+.clock { font-size: 84px; line-height: 0.9; color: var(--ink); letter-spacing: 0.02em; }
 .clock small { font-size: 28px; color: var(--red); margin-left: 8px; text-shadow: none; }
 .date { margin-top: 8px; font-size: 16px; font-weight: 500; }
 .weather { margin: 4px 0 4px; font-size: 13px; color: var(--t2); }
@@ -207,14 +206,14 @@ h2 .val small { font-size: 14px; color: var(--t3); }
 .sched li.now .t, .sched li.now .main { color: var(--ink); font-weight: 500; }
 .sched li.now::before {
   content: ""; position: absolute; left: 0; top: 50%; width: 8px; height: 8px; margin-top: -4px;
-  border-radius: 2px; background: var(--purple);
+  border-radius: 2px; background: var(--ink);
 }
 .focus { flex-direction: row; align-items: center; gap: 16px; padding: 8px 16px; }
 .focus-dial { position: relative; width: 60px; height: 60px; flex: none; }
 .ring { width: 60px; height: 60px; transform: rotate(-90deg); }
 .ring circle { fill: none; stroke-width: 6; }
 .ring-bg { stroke: var(--track); }
-.ring-fg { stroke: var(--purple); stroke-dasharray: 175.93; stroke-dashoffset: 175.93; }
+.ring-fg { stroke: var(--ink); stroke-dasharray: 175.93; stroke-dashoffset: 175.93; }
 .focus-time { position: absolute; inset: 0; display: grid; place-items: center; font: 500 13px var(--body); }
 .focus-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .focus-actions { display: flex; gap: 8px; }
@@ -229,7 +228,7 @@ h2 .val small { font-size: 14px; color: var(--t3); }
 .potd { margin-top: 8px; }
 .potd h2 { padding-bottom: 4px; }
 .potd .pips { margin: 4px 0; }
-.potd .pips i.on { background: var(--purple); }
+.potd .pips i.on { background: var(--ink); }
 .solved { justify-content: center; }
 .solved h2 { padding-bottom: 4px; }
 .split { display: flex; height: 8px; border-radius: 2px; overflow: hidden; gap: 2px; margin: 4px 0; }
@@ -264,14 +263,14 @@ h2 .val small { font-size: 14px; color: var(--t3); }
 .lvl-chip {
   width: 64px; height: 64px; flex: none; border: 2px solid var(--ink); border-radius: 8px;
   display: grid; place-content: center; text-align: center;
-  background: var(--purple); color: #fff; box-shadow: 2px 2px 0 var(--ink);
+  background: var(--ink); color: #fff; box-shadow: 2px 2px 0 var(--ink);
 }
 .lvl-chip span { font-size: 12px; line-height: 1; letter-spacing: 0.06em; }
 .lvl-chip b { font-size: 32px; line-height: 1; }
 .lvl-body { flex: 1; min-width: 0; }
 .lvl-title { font-size: 17px; font-weight: 500; }
 .bar.xp { margin: 8px 0 4px; height: 8px; }
-.bar.xp i { background: var(--purple); }
+.bar.xp i { background: var(--ink); }
 .perfect { flex-direction: row; padding: 8px 0; }
 .perfect div { flex: 1; padding: 0 16px; display: flex; flex-direction: column; }
 .perfect div + div { border-left: 1px solid var(--hair); }
@@ -283,7 +282,7 @@ h2 .val small { font-size: 14px; color: var(--t3); }
   font-size: 12px; color: var(--t3); padding: 2px 8px; border-radius: 4px;
   border: 1px dashed rgba(22, 19, 15, 0.25);
 }
-.badges .got { color: var(--ink); font-weight: 500; border: 2px solid var(--ink); background: var(--purple-soft); }
+.badges .got { color: var(--ink); font-weight: 500; border: 2px solid var(--ink); background: var(--track); }
 
 .quests { overflow-y: auto; min-height: 0; }
 .quests li {
@@ -301,8 +300,8 @@ h2 .val small { font-size: 14px; color: var(--t3); }
 .q-btns { grid-column: 3; grid-row: 1 / 3; display: flex; gap: 8px; }
 .q-btns .btn { padding: 0; }
 .quests li.auto { grid-template-columns: 1fr auto; }
-.quests li.met .pips i.on, .quests li.met .bar i { background: var(--purple); }
-.quests li.met .q-val b, .quests li.met .q-xp { color: var(--purple); }
+.quests li.met .pips i.on, .quests li.met .bar i { background: var(--easy); }
+.quests li.met .q-val b, .quests li.met .q-xp { color: var(--easy); }
 
 /* ---------- night ---------- */
 .night { position: fixed; inset: 0; background: #0d0b09; display: grid; place-items: center; }
