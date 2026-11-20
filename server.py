@@ -455,9 +455,25 @@ def grind_info(lc, cu):
     return out
 
 
-def schedule_for(day, cfg, all_events):
-    classes = [{"start": c[0], "end": c[1], "title": c[2], "where": c[3] if len(c) > 3 else ""}
-               for c in cfg.get("timetable", {}).get(day.strftime("%a").lower(), [])]
+def class_breaks(cfg):
+    """Periods with no classes (exam weeks, holidays): data/breaks.json (editor/API) + config "breaks"."""
+    out = []
+    for b in load_json(data_path("breaks.json"), []) + cfg.get("breaks", []):
+        try:
+            out.append({**b, "from_d": dt.date.fromisoformat(b["from"]), "to_d": dt.date.fromisoformat(b["to"])})
+        except (KeyError, ValueError, TypeError):
+            continue
+    return out
+
+
+def break_on(day, breaks):
+    return next((b for b in breaks if b["from_d"] <= day <= b["to_d"]), None)
+
+
+def schedule_for(day, cfg, all_events, breaks=()):
+    classes = [] if break_on(day, breaks) else [
+        {"start": c[0], "end": c[1], "title": c[2], "where": c[3] if len(c) > 3 else ""}
+        for c in cfg.get("timetable", {}).get(day.strftime("%a").lower(), [])]
     events = [{"start": e.get("time", ""), "end": e.get("end", ""), "where": e.get("where", ""),
                "title": e["title"], "kind": e.get("kind", "")}
               for e in all_events if e.get("date") == day.isoformat() and e.get("title")]
@@ -469,23 +485,43 @@ def _hhmm(s):
     return int(h) * 60 + int(m)
 
 
+def exam_schedule(brk, today, all_events):
+    """Every event left in a no-class period, with its date, for the Schedule panel's exam mode."""
+    start = max(today, brk["from_d"])
+    items = [{"date": e["date"], "start": e.get("time", ""), "end": e.get("end", ""), "title": e["title"],
+              "kind": e.get("kind", ""), "where": e.get("where", "")}
+             for e in all_events
+             if e.get("title") and start.isoformat() <= e.get("date", "") <= brk["to_d"].isoformat()]
+    return sorted(items, key=lambda x: (x["date"], x["start"] or "99"))
+
+
 def pick_schedule(cfg, all_events):
-    """Today's schedule, or the next day that has something once today's last item has ended."""
+    """Today's schedule, or the next day that has something once today's last item has ended.
+    Inside a no-class period (exam week), the panel shows the whole remaining exam schedule instead."""
     now = dt.datetime.now()
     today = now.date()
-    items = schedule_for(today, cfg, all_events)
+    breaks = class_breaks(cfg)
+    items = schedule_for(today, cfg, all_events, breaks)
     timed = [x for x in items if x["start"]]
     last_end = max((_hhmm(x["end"]) if x["end"] else _hhmm(x["start"]) + 60 for x in timed), default=None)
     over = not items or (last_end is not None and now.hour * 60 + now.minute >= last_end)
-    if not over:
-        return {"label": "Today", "isToday": True, "items": items}
-    for ahead in range(1, 8):
-        day = today + dt.timedelta(days=ahead)
-        nxt = schedule_for(day, cfg, all_events)
-        if nxt:
-            label = "Tomorrow" if ahead == 1 else day.strftime("%A")
-            return {"label": label, "isToday": False, "items": nxt}
-    return {"label": "Today", "isToday": True, "items": items}
+    view, label, nxt = today, "Today", items
+    if over:
+        for ahead in range(1, 8):
+            day = today + dt.timedelta(days=ahead)
+            found = schedule_for(day, cfg, all_events, breaks)
+            if found:
+                view, nxt = day, found
+                label = "Tomorrow" if ahead == 1 else day.strftime("%A")
+                break
+        else:
+            view, nxt = today, items
+    brk = break_on(view, breaks) or break_on(today, breaks)
+    if brk:
+        exams = exam_schedule(brk, today, all_events)
+        if exams:
+            return {"label": brk.get("label") or "Exams", "mode": "exams", "isToday": True, "items": exams}
+    return {"label": label, "isToday": view == today, "items": nxt}
 
 
 # ---------- goals, XP and levels ----------
@@ -713,6 +749,7 @@ def build_state():
     start_of_today = local_ts(today.isoformat())
     state["upcoming"] = sorted([u for u in upcoming if u["ts"] >= start_of_today], key=lambda u: u["ts"])
     state["events"] = sorted(load_json(data_path("events.json"), []), key=lambda e: (e["date"], e.get("time", "")))
+    state["breaks"] = sorted(load_json(data_path("breaks.json"), []), key=lambda b: b.get("from", ""))
     state["display"] = {k: cfg.get(k) for k in ("rotate_seconds", "night_start", "night_end", "name")}
     state["serverTime"] = time.time()
     return state
@@ -807,7 +844,33 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"today": focus[today.isoformat()]})
             if path.startswith("/api/events"):
                 return self.events(method, path, body)
+            if path.startswith("/api/breaks"):
+                return self.breaks(method, path, body)
         return self.send_json({"error": "Not found"}, 404)
+
+    def breaks(self, method, path, body):
+        """No-class periods: {"label": "End-sem exams", "from": "YYYY-MM-DD", "to": "YYYY-MM-DD"}."""
+        items = load_json(data_path("breaks.json"), [])
+        item_id = path[len("/api/breaks/"):] if path.startswith("/api/breaks/") else None
+        if method == "POST" and not item_id:
+            try:
+                start = dt.date.fromisoformat((body.get("from") or "").strip())
+                end = dt.date.fromisoformat((body.get("to") or "").strip())
+            except ValueError:
+                return self.send_json({"error": "from and to must be YYYY-MM-DD"}, 400)
+            if end < start:
+                return self.send_json({"error": "to must be on or after from"}, 400)
+            item = {"id": secrets.token_hex(4), "label": (body.get("label") or "No classes").strip()[:40],
+                    "from": start.isoformat(), "to": end.isoformat()}
+            items.append(item)
+            save_json(data_path("breaks.json"), items)
+            return self.send_json(item, 201)
+        match = next((i for i in items if i["id"] == item_id), None)
+        if method == "DELETE" and match:
+            items.remove(match)
+            save_json(data_path("breaks.json"), items)
+            return self.send_json({"ok": True})
+        return self.send_json({"error": "No such period"}, 404)
 
     def events(self, method, path, body):
         items = load_json(data_path("events.json"), [])
