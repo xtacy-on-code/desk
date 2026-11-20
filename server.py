@@ -573,8 +573,12 @@ def goal_value(g, today, lc, cu, counters, focus):
     if m in ("lc_potd", "lc_solved"):
         if not lc:
             return None
+        # Daily LeetCode quests follow LeetCode's own day (00:00 UTC, which is 05:30 IST), the same day
+        # the POTD and the streak use. Otherwise the quest resets at local midnight while LeetCode
+        # still counts the evening's solve as "today", and a cleared POTD shows as 0/1.
+        lc_day = dt.datetime.now(dt.timezone.utc).date()
         todays = {s["slug"] for s in lc.get("recent", [])
-                  if dt.datetime.fromtimestamp(s["ts"]).date() == today}
+                  if dt.datetime.fromtimestamp(s["ts"], dt.timezone.utc).date() == lc_day}
         if m == "lc_potd":
             return 1 if lc["daily"].get("slug") in todays else 0
         if g["period"] == "day":
@@ -603,11 +607,14 @@ def sync_goals(today, lc, cu, counters, focus):
     baseline (no XP), so turning this on doesn't dump hundreds of XP at once.
     """
     defs = goal_defs()
+    lc_day = dt.datetime.now(dt.timezone.utc).date()
     rows = []
     for g in defs:
         v = goal_value(g, today, lc, cu, counters, focus)
+        # A daily LeetCode quest belongs to LeetCode's day, so its XP key does too.
+        day = lc_day if g["metric"] in ("lc_potd", "lc_solved") and g["period"] == "day" else today
         rows.append({**g, "value": v, "xp": GOAL_XP.get(g["period"], 10),
-                     "key": f"g:{g['id']}:{period_key(g['period'], today)}"})
+                     "key": f"g:{g['id']}:{period_key(g['period'], day)}"})
 
     wanted = {}   # award key -> (xp, label), for everything decided right now
     undecided = set()
