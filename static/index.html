@@ -18,9 +18,13 @@
       <nav class="tabs" aria-label="Pages">
         <span class="tab-ind" id="tabInd" aria-hidden="true"></span>
         <button class="tab" data-page="0" aria-current="page">Today</button>
-        <button class="tab" data-page="1">Grind</button>
-        <button class="tab" data-page="2">Quests</button>
+        <button class="tab" data-page="1">Plan</button>
+        <button class="tab" data-page="2">Grind</button>
+        <button class="tab" data-page="3">Arena</button>
+        <button class="tab" data-page="4">Quests</button>
+        <button class="tab" data-page="5" hidden>Exams</button>
       </nav>
+      <div class="dots" id="dots" aria-hidden="true"></div>
       <div class="alert" id="alert" hidden></div>
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
       <div class="status">
@@ -64,6 +68,19 @@
         </div>
       </section>
 
+      <!-- PLAN -->
+      <section class="page plan" aria-label="Plan">
+        <div class="col">
+          <div class="gl grow">
+            <h2>Today's top 3 <span class="more" id="tasksMore"></span></h2>
+            <ul class="tasks" id="tasks"></ul>
+          </div>
+        </div>
+        <div class="col">
+          <div class="gl grow mess" id="mess"></div>
+        </div>
+      </section>
+
       <!-- GRIND -->
       <section class="page grind" aria-label="Grind">
         <div class="col">
@@ -87,6 +104,17 @@
           </div>
           <div class="gl" id="lcTarget"></div>
           <div class="gl grow raid" id="raid"></div>
+        </div>
+      </section>
+
+      <!-- ARENA -->
+      <section class="page arena" aria-label="Arena">
+        <div class="col">
+          <div class="gl pet" id="pet"></div>
+          <div class="gl grow rating" id="rating"></div>
+        </div>
+        <div class="col">
+          <div class="gl grow boss" id="boss"></div>
         </div>
       </section>
 
@@ -118,6 +146,16 @@
           </div>
         </div>
       </section>
+
+      <!-- EXAMS (only shown when an exam is within two weeks) -->
+      <section class="page exams-page" aria-label="Exams">
+        <div class="col">
+          <div class="gl grow exam-hero" id="examHero"></div>
+        </div>
+        <div class="col">
+          <div class="gl grow" id="examList"></div>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -131,6 +169,15 @@
     <div class="fs-bar"><i id="fsBar"></i></div>
     <div class="fs-meta" id="fsMeta"></div>
     <div class="fs-actions" id="fsActions"></div>
+  </div>
+
+  <div class="splash" id="splash" hidden>
+    <div class="burst" id="burst" aria-hidden="true"></div>
+    <div class="splash-word disp" id="splashWord">Kapow</div>
+    <div class="splash-title disp" id="splashTitle"></div>
+    <div class="splash-sub" id="splashSub"></div>
+    <div class="recap" id="recap" hidden></div>
+    <button class="btn" id="splashClose">Nice</button>
   </div>
 
   <div class="night" id="night" hidden>
