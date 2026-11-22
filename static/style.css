@@ -33,6 +33,8 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
+.stage { position: fixed; left: 0; top: 0; width: 800px; height: 360px; transform-origin: 0 0; overflow: hidden; }
+body.is-night { background: #0d0b09; }
 body {
   background: var(--paper);
   color: var(--ink);
@@ -109,7 +111,7 @@ h2 .val small { font-size: 14px; color: var(--t3); }
 .btn.ghost { color: var(--t2); }
 
 .app {
-  height: 100dvh;
+  height: 100%;
   display: grid;
   grid-template-rows: 40px 1fr;
   row-gap: 8px;
@@ -423,18 +425,36 @@ li.done .check { background: var(--easy); }
 .splash:has(.recap:not([hidden])) .burst { width: 220px; height: 220px; translate: -50% -110%; }
 @keyframes burst { from { opacity: 0; transform: scale(0.6) rotate(-12deg); } to { opacity: 1; } }
 
+/* ---------- weekly recap page ---------- */
+.recap-screen {
+  position: fixed; inset: 0; z-index: 16; background: var(--paper);
+  display: grid; grid-template-rows: auto 1fr auto; row-gap: 12px; padding: 12px 24px 12px;
+}
+.rc-top { display: flex; align-items: center; gap: 16px; }
+.rc-top .tag { position: static; font-size: 22px; padding: 4px 12px; transform: rotate(-2deg); }
+.rc-range { margin-left: auto; font-size: 14px; font-weight: 500; color: var(--t2); }
+.rc-grid { display: grid; grid-template-columns: 1.3fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; gap: 12px; min-height: 0; padding: 0 4px 4px 0; }
+.rc-grid .gl { padding: 8px 12px; justify-content: center; }
+.rc-grid h2 { padding-bottom: 2px; font-size: 12px; }
+.rc-lc { grid-row: 1 / 4; justify-content: flex-start !important; }
+.rc-lc .rc-bars { margin-top: auto; }
+.rc-big { font-size: 64px; line-height: 0.9; letter-spacing: 0.02em; }
+.rc-num { font-size: 36px; line-height: 1; letter-spacing: 0.02em; }
+.rc-bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; align-items: end; height: 72px; margin-top: 8px; }
+.rc-bars div { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; height: 100%; }
+.rc-bars i { display: block; width: 100%; border-radius: 2px; background: var(--ink); min-height: 4px; }
+.rc-bars i.zero { background: var(--track); }
+.rc-bars span { font-size: 11px; color: var(--t3); }
+.rc-boss { grid-column: 2 / 4; flex-direction: row !important; align-items: center; gap: 12px; }
+.rc-boss .boss-svg { width: 64px; height: 54px; }
+.rc-boss b { font: 400 22px/1 var(--comic); letter-spacing: 0.03em; display: block; }
+.rc-foot { display: flex; align-items: center; gap: 16px; }
+.rc-foot .btn { margin-left: auto; min-height: 40px; }
+.perfect div:last-child { cursor: pointer; }
+
 /* ---------- night ---------- */
 .night { position: fixed; inset: 0; z-index: 20; background: #0d0b09; display: grid; place-items: center; }
 .night-clock { font-size: 120px; color: #2b2620; letter-spacing: 0.02em; }
-
-/* ---------- portrait fallback ---------- */
-@media (orientation: portrait) {
-  body { overflow: auto; }
-  .app { height: auto; min-height: 100dvh; }
-  .pages { min-height: 760px; }
-  .page { grid-template-columns: 1fr; }
-  .clock { font-size: 64px; }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .page { transform: none !important; transition: opacity 160ms ease; }

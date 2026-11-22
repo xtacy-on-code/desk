@@ -895,11 +895,18 @@ def week_recap(today, lc, awards, focus):
     days = [(ws + dt.timedelta(days=i)).isoformat() for i in range(7)]
     start_ts = time.mktime(ws.timetuple())
     week_awards = [a for k, a in awards.items() if a["ts"] >= start_ts and a["xp"] > 0]
+    cal = (lc or {}).get("calendar", {})
+    end = ws + dt.timedelta(days=6)
     return {"week": week_key(today), "isSunday": today.weekday() == 6,
-            "subs": sum((lc or {}).get("calendar", {}).get(d, 0) for d in days) if lc else None,
+            "range": f"{ws.day} {ws.strftime('%b')} to {end.day} {end.strftime('%b')}",
+            "subs": sum(cal.get(d, 0) for d in days) if lc else None,
+            "subsByDay": [cal.get(d, 0) for d in days] if lc else None,
+            "activeDays": sum(1 for d in days if cal.get(d, 0)) if lc else None,
             "focus": sum(focus.get(d, 0) for d in days),
             "xp": sum(a["xp"] for a in week_awards),
-            "quests": sum(1 for k, a in awards.items() if k.startswith("g:") and a["ts"] >= start_ts)}
+            "quests": sum(1 for k, a in awards.items() if k.startswith("g:") and a["ts"] >= start_ts),
+            "perfectDays": sum(1 for k in awards if k.startswith("perfect:day:") and k.split(":", 2)[2] in days),
+            "nextBoss": boss_name(today + dt.timedelta(days=7))}
 
 
 def maybe_remind(cfg, lc):

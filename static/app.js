@@ -32,6 +32,19 @@ function mins(m) {
   return h ? `${h}h ${pad(m % 60)}m` : `${m}m`;
 }
 
+/* ---------------- fit the 800x360 stage to the screen ---------------- */
+
+let scale = 1;
+function fit() {
+  const w = innerWidth, h = innerHeight;
+  scale = Math.min(w / 800, h / 360);
+  const x = (w - 800 * scale) / 2, y = (h - 360 * scale) / 2;
+  $("stage").style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+}
+fit();
+addEventListener("resize", fit);
+screen.orientation?.addEventListener?.("change", () => setTimeout(fit, 200));
+
 /* ---------------- pages ---------------- */
 
 const pages = [...document.querySelectorAll(".page")];
@@ -104,6 +117,7 @@ function tick() {
 
   const night = inNight(now) && Date.now() - nightWake > 60_000 && !focus.running();
   $("night").hidden = !night;
+  document.body.classList.toggle("is-night", night);
   if (night) $("nightClock").textContent = hm(now);
 
   renderFocus();
@@ -327,6 +341,7 @@ function render() {
   runTicks();
   celebrate();
   maybeRecap();
+  if (location.hash === "#recap" && !render.recapOpened) { render.recapOpened = true; showRecap(); }
   renderFocus(true);
 }
 
@@ -720,12 +735,12 @@ $("examHero").addEventListener("click", async (e) => {
 // A word pops out of whatever you just tapped.
 const POPS = ["Ka-ching", "Pow", "Bam", "Boom", "Zap", "Yes"];
 function pop(el) {
-  const r = el.getBoundingClientRect(), w = document.createElement("span");
+  const r = el.getBoundingClientRect(), st = $("stage").getBoundingClientRect(), w = document.createElement("span");
   w.className = "pop disp";
   w.textContent = POPS[Math.floor(Math.random() * POPS.length)];
-  w.style.left = `${r.left + r.width / 2}px`;
-  w.style.top = `${r.top}px`;
-  document.body.appendChild(w);
+  w.style.left = `${(r.left + r.width / 2 - st.left) / scale}px`;
+  w.style.top = `${(r.top - st.top) / scale}px`;
+  $("stage").appendChild(w);
   w.addEventListener("animationend", () => w.remove());
   try { navigator.vibrate?.(30); } catch {}
 }
@@ -774,18 +789,33 @@ function splash(word, title, sub, recap) {
 }
 $("splashClose").addEventListener("click", () => { $("splash").hidden = true; lastTouch = Date.now(); });
 
-// Sunday from 20:00: a recap of the week, once.
+// Sunday from 20:00 the week recap opens once by itself; tapping Total XP on Quests opens it any time.
 function maybeRecap() {
   const r = state.progress.recap;
   if (!r || !r.isSunday || new Date().getHours() < 20 || store.get("recapSeen") === r.week) return;
   store.set("recapSeen", r.week);
-  const b = state.progress.boss;
-  splash("That's a wrap", `Week ${r.week.slice(-2)} recap`, b?.defeated ? `You beat ${b.name}` : `${b?.name || "The boss"} survived with ${b ? b.hp - b.dealt : 0} HP`,
-    `<div><b class="disp">${r.subs ?? "-"}</b><span>LeetCode submissions</span></div>
-     <div><b class="disp">${mins(r.focus)}</b><span>Focused</span></div>
-     <div><b class="disp">${r.xp}</b><span>XP earned</span></div>
-     <div><b class="disp">${r.quests}</b><span>Quests cleared</span></div>`);
+  showRecap();
 }
+
+function showRecap() {
+  const r = state?.progress?.recap, b = state?.progress?.boss;
+  if (!r) return;
+  $("rcRange").textContent = `Week ${r.week.slice(-2)} · ${r.range}${r.isSunday ? "" : " · so far"}`;
+  $("rcSubs").textContent = r.subs ?? "-";
+  $("rcSubsSub").textContent = r.activeDays != null ? `submissions · active ${r.activeDays} of 7 days` : "submissions";
+  const days = r.subsByDay || [], max = Math.max(1, ...days);
+  $("rcBars").innerHTML = days.map((n, i) => `<div><i class="${n ? "" : "zero"}" style="height:${n ? Math.max(8, (n / max) * 100) : 6}%"></i><span>${"MTWTFSS"[i]}</span></div>`).join("");
+  $("rcFocus").textContent = mins(r.focus);
+  $("rcXp").textContent = inr.format(r.xp);
+  $("rcQuests").textContent = r.quests;
+  $("rcPerfect").textContent = `${r.perfectDays}/7`;
+  $("rcBoss").innerHTML = b ? `${bossSvg(b.defeated)}<div><b>${esc(b.name)}</b>
+      <span class="sub">${b.defeated ? "Defeated this week, +100 XP" : `Survived with ${b.hp - b.dealt} of ${b.hp} HP`}</span></div>` : "";
+  $("rcNext").textContent = r.nextBoss ? `Next week's boss: ${r.nextBoss}` : "";
+  $("recapScreen").hidden = false;
+}
+$("rcClose").addEventListener("click", () => { $("recapScreen").hidden = true; lastTouch = Date.now(); });
+document.querySelector(".perfect div:last-child").addEventListener("click", () => { lastTouch = Date.now(); showRecap(); });
 
 /* ---------------- XP toasts ---------------- */
 

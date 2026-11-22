@@ -19,6 +19,8 @@ Turn an old Android phone into an always-on study and grind dashboard for your d
 - **Contest alert:** shows in the top bar 90 minutes before a contest starts.
 - **Night mode:** by default from 00:30 to 07:00 the screen shows only a dim clock (change the times in the editor under *Phone settings*). Tap it to wake the dashboard for a minute.
 - **Streak reminder:** at 22:00 (editable), if LeetCode has no submission from you yet that day, the phone gets a notification. Needs Termux:API.
+- **Always fits the screen:** the whole dashboard is drawn at 800×360 and scaled to whatever space the phone gives it, so nothing gets cut off when the browser bars or status bar show.
+- **Weekly recap:** every Sunday from 20:00 a full-screen recap of the week (LeetCode by day, focus, XP, quests, perfect days, the boss). Tap **Total XP** on Quests, or open `/#recap`, to see it again.
 - **Comic moments:** a burst splash when you level up, beat the boss or clear every daily quest; a Sunday-evening recap of the week; words that pop out of +1 and tick buttons; numbers that roll up when they change; and page dots in the top bar.
 - **Burn-in protection:** the layout shifts a few pixels every 5 minutes.
 - **Battery and heat:** a battery and temperature readout, which turns red at 42°C or above.

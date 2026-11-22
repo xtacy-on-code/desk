@@ -13,6 +13,9 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+  <!-- Everything is drawn on one 800x360 stage that app.js scales to fit the screen, so a smaller
+       viewport (browser bars, status bar, display size) shrinks it instead of cutting it off. -->
+  <div class="stage" id="stage">
   <div class="app" id="app">
     <header class="top">
       <nav class="tabs" aria-label="Pages">
@@ -180,8 +183,22 @@
     <button class="btn" id="splashClose">Nice</button>
   </div>
 
+  <div class="recap-screen" id="recapScreen" hidden>
+    <div class="rc-top"><span class="tag">That's a wrap</span><span class="rc-range" id="rcRange"></span></div>
+    <div class="rc-grid">
+      <div class="gl rc-lc"><h2>LeetCode this week</h2><div class="rc-big disp" id="rcSubs">0</div><div class="sub" id="rcSubsSub"></div><div class="rc-bars" id="rcBars"></div></div>
+      <div class="gl rc-cell"><h2>Focused</h2><div class="rc-num disp" id="rcFocus">0</div></div>
+      <div class="gl rc-cell"><h2>XP earned</h2><div class="rc-num disp" id="rcXp">0</div></div>
+      <div class="gl rc-cell"><h2>Quests cleared</h2><div class="rc-num disp" id="rcQuests">0</div></div>
+      <div class="gl rc-cell"><h2>Perfect days</h2><div class="rc-num disp" id="rcPerfect">0</div></div>
+      <div class="gl rc-boss" id="rcBoss"></div>
+    </div>
+    <div class="rc-foot"><span class="sub" id="rcNext"></span><button class="btn primary" id="rcClose">On to next week</button></div>
+  </div>
+
   <div class="night" id="night" hidden>
     <div class="night-clock disp" id="nightClock"></div>
+  </div>
   </div>
 
   <script src="/app.js"></script>
